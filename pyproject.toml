@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pwetl"
+version = "0.1.0"
+description = "A flexible ETL framework based on Pathway - just write transforms and config YAML to build your ETL service"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "willie_wu" },
+]
+keywords = ["etl", "data", "pipeline", "pathway", "transform"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+]
+dependencies = [
+    "pathway>=0.29.0",
+    "pyyaml>=6.0",
+    "requests>=2.31.0",
+]
+
+[project.scripts]
+pwetl = "pwetl.cli:cli_entry_point"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+]
+postgres = [
+    "psycopg2-binary>=2.9.0",
+]
+mysql = [
+    "mysql-connector-python>=8.0.0",
+]
+database = [
+    "pwetl[postgres,mysql]",
+]
+dotenv = [
+    "python-dotenv>=1.0.0",
+]
+all = [
+    "pwetl[dev,database,dotenv]",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pwetl"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+
