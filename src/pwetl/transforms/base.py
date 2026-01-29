@@ -23,7 +23,6 @@ class BaseTransform(ABC):
         Raises:
             Exception: 轉換失敗時拋出異常
         """
-        pass
 
     def setup(self) -> None:
         """初始化資源（可選）。
@@ -31,7 +30,6 @@ class BaseTransform(ABC):
         在 transform() 之前被呼叫，用於載入模型、建立連線等。
         子類可以覆寫此方法。
         """
-        pass
 
     def teardown(self) -> None:
         """清理資源（可選）。
@@ -39,4 +37,3 @@ class BaseTransform(ABC):
         在 transform() 之後被呼叫，用於釋放資源、關閉連線等。
         子類可以覆寫此方法。
         """
-        pass

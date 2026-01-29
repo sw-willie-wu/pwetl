@@ -31,8 +31,7 @@ class DynamicLoader:
         """
         if module_path.endswith('.py'):
             return DynamicLoader._load_from_file(module_path, class_name)
-        else:
-            return DynamicLoader._load_from_package(module_path, class_name)
+        return DynamicLoader._load_from_package(module_path, class_name)
 
     @staticmethod
     def _load_from_file(file_path: str, class_name: str) -> Type:
@@ -89,8 +88,8 @@ class DynamicLoader:
         """
         try:
             module = importlib.import_module(module_path)
-        except ModuleNotFoundError:
-            raise ImportError(f"找不到模組: {module_path}")
+        except ModuleNotFoundError as exc:
+            raise ImportError(f"找不到模組: {module_path}") from exc
 
         if not hasattr(module, class_name):
             raise ImportError(

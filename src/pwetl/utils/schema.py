@@ -1,5 +1,6 @@
 """Schema 解析工具。"""
-from typing import Any, Dict, Type
+from typing import Dict, Type
+
 import pathway as pw
 
 

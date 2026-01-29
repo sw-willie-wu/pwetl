@@ -54,13 +54,12 @@ class DatabaseSource(BaseSource):
 
         if db_type == 'postgresql':
             return self._read_postgresql()
-        elif db_type == 'mysql':
+        if db_type == 'mysql':
             return self._read_mysql()
-        else:
-            raise ValueError(
-                f"不支援的資料庫類型: '{db_type}'\n"
-                f"支援的類型: {', '.join(self.DB_DEFAULTS.keys())}"
-            )
+        raise ValueError(
+            f"不支援的資料庫類型: '{db_type}'\n"
+            f"支援的類型: {', '.join(self.DB_DEFAULTS.keys())}"
+        )
 
     def _read_postgresql(self) -> pw.Table:
         """從 PostgreSQL 讀取資料。"""
@@ -80,22 +79,21 @@ class DatabaseSource(BaseSource):
                 query=query,
                 schema=schema,
             )
-        else:
-            return pw.io.postgres.read(
-                conn_str,
-                query=query,
-            )
+        return pw.io.postgres.read(
+            conn_str,
+            query=query,
+        )
 
     def _read_mysql(self) -> pw.Table:
         """從 MySQL 讀取資料。"""
         # MySQL 需要使用 connector
         try:
-            import mysql.connector
-        except ImportError:
+            import mysql.connector  # pylint: disable=unused-import
+        except ImportError as exc:
             raise ImportError(
                 "MySQL 支援需要安裝額外套件：\n"
                 "pip install 'pwetl[mysql]' 或 pip install mysql-connector-python"
-            )
+            ) from exc
 
         # 建立連線配置
         conn_config = {

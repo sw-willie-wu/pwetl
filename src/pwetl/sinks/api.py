@@ -26,6 +26,11 @@ class APISink(BaseSink):
         'batch_size': 1,           # 批次大小（0 表示一次全部發送）
     }
 
+    def __init__(self, name: str, config: Dict[str, Any]):
+        """初始化 APISink。"""
+        super().__init__(name, config)
+        self._temp_path = None
+
     def write(self, table: pw.Table) -> None:
         """將資料 POST 到 API。
 
@@ -39,7 +44,6 @@ class APISink(BaseSink):
         # 然後讀取並發送到 API
 
         import tempfile
-        import json
         import os
 
         # 建立暫存檔案
@@ -57,7 +61,7 @@ class APISink(BaseSink):
             # 這部分在 teardown 中執行
             self._temp_path = temp_path
 
-        except Exception as e:
+        except Exception:
             # 清理暫存檔案
             if os.path.exists(temp_path):
                 os.remove(temp_path)
@@ -104,12 +108,7 @@ class APISink(BaseSink):
         Raises:
             requests.RequestException: 當請求失敗且重試次數用盡時
         """
-        url = self.config['url']
-        method = self.config['method'].upper()
         headers = self.config['headers']
-        timeout = self.config['timeout']
-        max_retry = self.config['max_retry']
-        retry_delay = self.config['retry_delay']
         batch_size = self.config['batch_size']
 
         # 確保 Content-Type 是 JSON
@@ -126,36 +125,24 @@ class APISink(BaseSink):
             batches = [data]  # 一次全部發送
 
         # 發送每個批次
-        for i, batch in enumerate(batches):
-            self._send_batch(
-                batch, url, method, headers, timeout, max_retry, retry_delay
-            )
+        for batch in batches:
+            self._send_batch(batch)
 
-    def _send_batch(
-        self,
-        batch: List[Dict[str, Any]],
-        url: str,
-        method: str,
-        headers: Dict[str, str],
-        timeout: int,
-        max_retry: int,
-        retry_delay: int,
-    ) -> None:
+    def _send_batch(self, batch: List[Dict[str, Any]]) -> None:
         """發送單一批次到 API。
 
         Args:
             batch: 要發送的資料批次
-            url: API URL
-            method: HTTP 方法
-            headers: HTTP Headers
-            timeout: 超時時間
-            max_retry: 最大重試次數
-            retry_delay: 重試延遲
 
         Raises:
             requests.RequestException: 當重試次數用盡後仍然失敗時
         """
-        last_error = None
+        url = self.config['url']
+        method = self.config['method'].upper()
+        headers = self.config['headers']
+        timeout = self.config['timeout']
+        max_retry = self.config['max_retry']
+        retry_delay = self.config['retry_delay']
 
         for attempt in range(max_retry + 1):
             try:
@@ -170,14 +157,11 @@ class APISink(BaseSink):
                 return  # 成功
 
             except requests.RequestException as e:
-                last_error = e
-
                 # 如果還有重試機會，等待後重試
                 if attempt < max_retry:
                     time.sleep(retry_delay)
                     continue
-                else:
-                    # 重試次數用盡
-                    raise RuntimeError(
-                        f"API 請求失敗（已重試 {max_retry} 次）: {e}"
-                    ) from e
+                # 重試次數用盡
+                raise RuntimeError(
+                    f"API 請求失敗（已重試 {max_retry} 次）: {e}"
+                ) from e

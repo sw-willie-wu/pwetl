@@ -2,7 +2,7 @@
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Union
 
 
 class EnvVarSubstitution:
@@ -30,12 +30,11 @@ class EnvVarSubstitution:
         """
         if isinstance(value, str):
             return cls._substitute_string(value)
-        elif isinstance(value, dict):
+        if isinstance(value, dict):
             return {k: cls.substitute(v) for k, v in value.items()}
-        elif isinstance(value, list):
+        if isinstance(value, list):
             return [cls.substitute(item) for item in value]
-        else:
-            return value
+        return value
 
     @classmethod
     def _substitute_string(cls, value: str) -> str:
@@ -59,10 +58,9 @@ class EnvVarSubstitution:
             if env_value is None:
                 if default_value is not None:
                     return default_value
-                else:
-                    raise ValueError(
-                        f"環境變數 '{var_name}' 不存在且沒有預設值"
-                    )
+                raise ValueError(
+                    f"環境變數 '{var_name}' 不存在且沒有預設值"
+                )
 
             return env_value
 

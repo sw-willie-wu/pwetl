@@ -1,0 +1,27 @@
+[MASTER]
+# 忽略的檔案或目錄
+ignore=.venv,venv,build,dist,__pycache__
+
+[MESSAGES CONTROL]
+# 禁用的警告
+disable=
+    # E1101: pathway 模組的動態成員無法被 pylint 正確識別
+    no-member,
+    # R0903: 工具類（只有靜態方法）的設計是合理的
+    too-few-public-methods,
+    # C0415: 在某些情況下需要在函數內導入（避免循環引用、可選依賴）
+    import-outside-toplevel,
+    # R0801: 重複代碼檢查太嚴格，某些類似結構是合理的
+    duplicate-code
+
+[FORMAT]
+# 每行最大字符數
+max-line-length=100
+
+[DESIGN]
+# 最多參數數量
+max-args=10
+
+[BASIC]
+# 變數命名風格
+variable-rgx=[a-z_][a-z0-9_]{0,30}$

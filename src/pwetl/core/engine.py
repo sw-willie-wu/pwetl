@@ -2,11 +2,13 @@
 import sys
 from pathlib import Path
 from typing import Union
+
 from pwetl.core.config import ConfigLoader
-from pwetl.core.registry import SourceFactory, SinkFactory
 from pwetl.core.pipeline import Pipeline
-from pwetl.utils.loader import TransformLoader
+from pwetl.core.registry import SinkFactory, SourceFactory
 from pwetl.utils.env import load_env_file
+from pwetl.utils.loader import TransformLoader
+from pwetl.utils.logger import get_logger
 
 
 class ETLEngine:

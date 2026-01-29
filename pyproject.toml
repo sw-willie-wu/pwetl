@@ -23,7 +23,8 @@ classifiers = [
     "Topic :: Database",
 ]
 dependencies = [
-    "pathway>=0.29.0",
+    "pathway>=0.29.0; sys_platform == 'linux'",
+    "pydantic>=2.12.5",
     "pyyaml>=6.0",
     "requests>=2.31.0",
 ]

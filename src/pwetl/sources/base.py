@@ -1,6 +1,7 @@
 """Base class for all data sources."""
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
 import pathway as pw
 
 
@@ -54,7 +55,6 @@ class BaseSource(ABC):
         Raises:
             Exception: 讀取失敗時拋出異常
         """
-        pass
 
     def setup(self) -> None:
         """初始化資源（可選）。
@@ -62,7 +62,6 @@ class BaseSource(ABC):
         在 read() 之前被呼叫，用於建立連線、載入資源等。
         子類可以覆寫此方法。
         """
-        pass
 
     def teardown(self) -> None:
         """清理資源（可選）。
@@ -70,4 +69,3 @@ class BaseSource(ABC):
         在 read() 之後被呼叫，用於關閉連線、釋放資源等。
         子類可以覆寫此方法。
         """
-        pass

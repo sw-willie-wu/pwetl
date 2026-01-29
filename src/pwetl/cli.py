@@ -1,8 +1,11 @@
 """Command-line interface for pwetl."""
 import argparse
+import logging
 import sys
 from pathlib import Path
+
 from pwetl.core.engine import ETLEngine
+from pwetl.utils.logger import setup_logger
 
 
 def cli_entry_point():
@@ -68,12 +71,15 @@ def cli_entry_point():
     # 解析參數
     args = parser.parse_args()
 
+    # 設置日誌
+    logger = setup_logger(verbose=args.verbose)
+
     # 執行
     try:
         # 檢查配置檔案是否存在
         config_path = Path(args.config)
         if not config_path.exists():
-            print(f"❌ 錯誤: 配置檔案不存在: {args.config}")
+            logger.error(f"配置檔案不存在: {args.config}")
             sys.exit(1)
 
         # 建立 ETL Engine
@@ -90,15 +96,13 @@ def cli_entry_point():
             engine.execute()
 
     except KeyboardInterrupt:
-        print("\n\n⚠️  使用者中斷執行")
+        logger.warning("\n使用者中斷執行")
         sys.exit(130)
 
     except Exception as e:
-        print(f"\n❌ 執行失敗: {e}")
+        logger.error(f"執行失敗: {e}")
         if args.verbose:
-            import traceback
-            print("\n詳細錯誤訊息:")
-            traceback.print_exc()
+            logger.exception("詳細錯誤訊息:")
         sys.exit(1)
 
 

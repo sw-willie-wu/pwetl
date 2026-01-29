@@ -54,7 +54,6 @@ class BaseSink(ABC):
         Raises:
             Exception: 寫入失敗時拋出異常
         """
-        pass
 
     def setup(self) -> None:
         """初始化資源（可選）。
@@ -62,7 +61,6 @@ class BaseSink(ABC):
         在 write() 之前被呼叫，用於建立連線、建立資料表等。
         子類可以覆寫此方法。
         """
-        pass
 
     def teardown(self) -> None:
         """清理資源（可選）。
@@ -70,4 +68,3 @@ class BaseSink(ABC):
         在 write() 之後被呼叫，用於關閉連線、釋放資源等。
         子類可以覆寫此方法。
         """
-        pass

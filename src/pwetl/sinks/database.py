@@ -68,16 +68,16 @@ class DatabaseSink(BaseSink):
         # 寫入資料
         pw.io.postgres.write(table, conn_str, table_name)
 
-    def _write_mysql(self, table: pw.Table) -> None:
+    def _write_mysql(self, _table: pw.Table) -> None:
         """寫入 MySQL。"""
         # MySQL 需要特殊處理（Pathway 可能不直接支援）
         try:
-            import mysql.connector
-        except ImportError:
+            import mysql.connector  # pylint: disable=unused-import
+        except ImportError as exc:
             raise ImportError(
                 "MySQL 支援需要安裝額外套件：\n"
                 "pip install 'pwetl[mysql]' 或 pip install mysql-connector-python"
-            )
+            ) from exc
 
         # 注意：Pathway 可能不直接支援 MySQL 寫入
         # 這裡提供基本實作，可能需要調整

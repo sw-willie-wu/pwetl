@@ -1,7 +1,8 @@
 """File-based data sinks."""
 from pathlib import Path
-from typing import Any, Dict, List
+
 import pathway as pw
+
 from pwetl.sinks.base import BaseSink
 
 

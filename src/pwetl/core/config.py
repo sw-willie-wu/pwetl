@@ -1,5 +1,4 @@
 """配置載入器。"""
-import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Union
 from pwetl.utils.env import EnvVarSubstitution

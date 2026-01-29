@@ -1,7 +1,8 @@
 """File-based data sources."""
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
 import re
+from pathlib import Path
+from typing import Optional, Type
+
 import pathway as pw
 from pwetl.sources.base import BaseSource
 from pwetl.utils.schema import SchemaParser
@@ -60,22 +61,26 @@ class FileSource(BaseSource):
         # 判斷是資料夾還是檔案
         if path_obj.is_dir():
             return self._read_directory(path, file_format, schema)
-        else:
-            return self._read_single_file(path, file_format, schema)
+        return self._read_single_file(path, file_format, schema)
 
-    def _read_single_file(self, path: str, file_format: str, schema: Optional[Type[pw.Schema]]) -> pw.Table:
+    def _read_single_file(
+        self, path: str, file_format: str, schema: Optional[Type[pw.Schema]]
+    ) -> pw.Table:
         """讀取單一檔案。"""
         # 根據格式讀取檔案
         if file_format == 'csv':
             return self._read_csv(path, schema)
-        elif file_format == 'json':
+        if file_format == 'json':
             return self._read_json(path, schema)
-        elif file_format == 'jsonl':
+        if file_format == 'jsonl':
             return self._read_jsonl(path, schema)
-        elif file_format == 'parquet':
+        if file_format == 'parquet':
             return self._read_parquet(path, schema)
+        return None
 
-    def _read_directory(self, path: str, file_format: str, schema: Optional[Type[pw.Schema]]) -> pw.Table:
+    def _read_directory(
+        self, path: str, file_format: str, schema: Optional[Type[pw.Schema]]
+    ) -> pw.Table:
         """讀取資料夾內的檔案。
 
         使用 regex 或 filename_pattern 來過濾檔案。
@@ -86,7 +91,9 @@ class FileSource(BaseSource):
         # 根據格式建立最終的讀取路徑
         if regex_pattern:
             # 使用正則表達式過濾
-            final_path = self._get_regex_filtered_path(path, file_format, regex_pattern)
+            final_path = self._get_regex_filtered_path(
+                path, file_format, regex_pattern
+            )
         elif filename_pattern:
             # 使用檔名匹配模式（glob pattern）
             final_path = str(Path(path) / filename_pattern)
@@ -97,12 +104,13 @@ class FileSource(BaseSource):
         # 根據格式讀取檔案
         if file_format == 'csv':
             return self._read_csv(final_path, schema)
-        elif file_format == 'json':
+        if file_format == 'json':
             return self._read_json(final_path, schema)
-        elif file_format == 'jsonl':
+        if file_format == 'jsonl':
             return self._read_jsonl(final_path, schema)
-        elif file_format == 'parquet':
+        if file_format == 'parquet':
             return self._read_parquet(final_path, schema)
+        return None
 
     def _get_regex_filtered_path(self, directory: str, file_format: str, pattern: str) -> str:
         """使用正則表達式過濾檔案，轉換為 glob pattern。
@@ -142,9 +150,8 @@ class FileSource(BaseSource):
             # 多個檔案：使用 glob pattern（限制較多）
             # 嘗試從 regex 轉換為 glob pattern（簡單情況）
             return self._convert_regex_to_glob(directory, file_format, pattern)
-        else:
-            # streaming 模式：轉換為 glob（限制較多）
-            return self._convert_regex_to_glob(directory, file_format, pattern)
+        # streaming 模式：轉換為 glob（限制較多）
+        return self._convert_regex_to_glob(directory, file_format, pattern)
 
     def _convert_regex_to_glob(self, directory: str, file_format: str, pattern: str) -> str:
         """嘗試將簡單的正則表達式轉換為 glob pattern。
@@ -192,7 +199,9 @@ class FileSource(BaseSource):
             return pw.io.jsonlines.read(path, schema=schema, mode=mode)
         return pw.io.jsonlines.read(path, mode=mode)
 
-    def _read_parquet(self, path: str, schema: Optional[Type[pw.Schema]]) -> pw.Table:
+    def _read_parquet(
+        self, path: str, _schema: Optional[Type[pw.Schema]]
+    ) -> pw.Table:
         """讀取 Parquet 檔案。"""
         mode = self.config['mode']
         # Parquet 檔案已經包含 schema 資訊
