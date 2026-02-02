@@ -29,6 +29,9 @@ class FileSink(BaseSink):
         Raises:
             ValueError: 當檔案格式不支援時
         """
+        # 應用 schema（如果有定義）
+        table = self._apply_schema(table)
+        
         path = self.config['path']
         file_format = self.config['format']
 
