@@ -62,29 +62,44 @@ sinks:
         assert 'value' in content
         assert 'doubled' in content
 
-    def test_engine_run_with_env_vars(self, tmp_path, monkeypatch):
-        """Test engine with environment variable substitution."""
-        # Set environment variable
-        monkeypatch.setenv('INPUT_PATH', str(tmp_path / "input.csv"))
-        monkeypatch.setenv('OUTPUT_PATH', str(tmp_path / "output.csv"))
+    def test_engine_run_with_env_vars(self, tmp_path):
+        """Test engine with environment variables."""
+        import os
+        import sys
+        import importlib
 
-        # Create input CSV
-        input_file = tmp_path / "input.csv"
-        input_file.write_text("name,age\nAlice,25\nBob,30\n")
-
-        # Create transform module
+        # Create transform module FIRST
         transform_file = tmp_path / "transform.py"
         transform_file.write_text("""
 from pwetl.transforms.base import BaseTransform
 
 class PassThroughTransform(BaseTransform):
     def transform(self, tables):
+        # Return with sink name as key
+        if 'input' in tables:
+            return {'output': tables['input']}
         return tables
 """)
 
-        # Create config file with environment variables
-        config_file = tmp_path / "config.yaml"
-        config_content = """
+        # Add tmp_path to sys.path so transform can be imported
+        sys.path.insert(0, str(tmp_path))
+
+        # Clear any cached import
+        if 'transform' in sys.modules:
+            del sys.modules['transform']
+
+        try:
+            # Set environment variables
+            os.environ["INPUT_PATH"] = str(tmp_path / "input.csv")
+            os.environ["OUTPUT_PATH"] = str(tmp_path / "output.csv")
+
+            # Create input CSV
+            input_file = tmp_path / "input.csv"
+            input_file.write_text("name,age\\nBob,25\\n")
+
+            # Create config file with environment variables
+            config_file = tmp_path / "config.yaml"
+            config_content = """
 sources:
   - name: input
     type: csv
@@ -100,35 +115,51 @@ sinks:
     type: csv
     path: ${OUTPUT_PATH}
 """
-        config_file.write_text(config_content)
+            config_file.write_text(config_content)
 
-        # Run engine
-        engine = ETLEngine(config_path=config_file, verbose=False)
-        engine.execute()
+            # Run engine
+            engine = ETLEngine(config_path=config_file, verbose=False)
+            engine.execute()
 
-        # Verify output
-        output_file = tmp_path / "output.csv"
-        assert output_file.exists()
+            # Verify output
+            output_file = tmp_path / "output.csv"
+            assert output_file.exists()
+        finally:
+            # Clean up sys.path
+            sys.path.remove(str(tmp_path))
 
     def test_engine_run_verbose_mode(self, tmp_path, capsys):
         """Test engine verbose mode."""
-        # Create input CSV
-        input_file = tmp_path / "input.csv"
-        input_file.write_text("name,score\nAlice,90\n")
+        import sys
 
-        # Create transform module
+        # Create transform module FIRST
         transform_file = tmp_path / "transform.py"
         transform_file.write_text("""
 from pwetl.transforms.base import BaseTransform
 
 class PassThroughTransform(BaseTransform):
     def transform(self, tables):
+        # Return with sink name as key
+        if 'input' in tables:
+            return {'output': tables['input']}
         return tables
 """)
 
-        # Create config file
-        config_file = tmp_path / "config.yaml"
-        config_content = f"""
+        # Add tmp_path to sys.path so transform can be imported
+        sys.path.insert(0, str(tmp_path))
+
+        # Clear any cached import
+        if 'transform' in sys.modules:
+            del sys.modules['transform']
+
+        try:
+            # Create input CSV
+            input_file = tmp_path / "input.csv"
+            input_file.write_text("name,score\nAlice,90\n")
+
+            # Create config file
+            config_file = tmp_path / "config.yaml"
+            config_content = f"""
 sources:
   - name: input
     type: csv
@@ -144,15 +175,18 @@ sinks:
     type: csv
     path: {tmp_path / "output.csv"}
 """
-        config_file.write_text(config_content)
+            config_file.write_text(config_content)
 
-        # Run engine with verbose=True
-        engine = ETLEngine(config_path=config_file, verbose=True)
-        engine.execute()
+            # Run engine with verbose=True
+            engine = ETLEngine(config_path=config_file, verbose=True)
+            engine.execute()
 
-        # Check verbose output
-        captured = capsys.readouterr()
-        assert '載入配置' in captured.out or '載入環境變數' in captured.out
+            # Check verbose output
+            captured = capsys.readouterr()
+            assert '載入配置' in captured.out or '載入環境變數' in captured.out
+        finally:
+            # Clean up sys.path
+            sys.path.remove(str(tmp_path))
 
     def test_engine_invalid_config(self, tmp_path):
         """Test engine with invalid config."""
@@ -176,14 +210,9 @@ sources: []
 
     def test_engine_multiple_sources_sinks(self, tmp_path):
         """Test engine with multiple sources and sinks."""
-        # Create two input CSVs
-        input1 = tmp_path / "input1.csv"
-        input1.write_text("user_id,value\n1,100\n")
+        import sys
 
-        input2 = tmp_path / "input2.csv"
-        input2.write_text("user_id,value\n2,200\n")
-
-        # Create transform module that handles multiple sources
+        # Create transform module FIRST
         transform_file = tmp_path / "transform.py"
         transform_file.write_text("""
 import pathway as pw
@@ -191,15 +220,33 @@ from pwetl.transforms.base import BaseTransform
 
 class MultiSourceTransform(BaseTransform):
     def transform(self, tables):
+        # Return with sink names as keys
         result = {}
-        for name, table in tables.items():
-            result[name] = table
+        if 'source1' in tables:
+            result['output1'] = tables['source1']
+        if 'source2' in tables:
+            result['output2'] = tables['source2']
         return result
 """)
 
-        # Create config file
-        config_file = tmp_path / "config.yaml"
-        config_content = f"""
+        # Add tmp_path to sys.path so transform can be imported
+        sys.path.insert(0, str(tmp_path))
+
+        # Clear any cached import
+        if 'transform' in sys.modules:
+            del sys.modules['transform']
+
+        try:
+            # Create two input CSVs
+            input1 = tmp_path / "input1.csv"
+            input1.write_text("user_id,value\\n1,100\\n")
+
+            input2 = tmp_path / "input2.csv"
+            input2.write_text("user_id,value\\n2,200\\n")
+
+            # Create config file
+            config_file = tmp_path / "config.yaml"
+            config_content = f"""
 sources:
   - name: source1
     type: csv
@@ -226,12 +273,15 @@ sinks:
     type: csv
     path: {tmp_path / "output2.csv"}
 """
-        config_file.write_text(config_content)
+            config_file.write_text(config_content)
 
-        # Run engine
-        engine = ETLEngine(config_path=config_file, verbose=False)
-        engine.execute()
+            # Run engine
+            engine = ETLEngine(config_path=config_file, verbose=False)
+            engine.execute()
 
-        # Verify both outputs exist
-        assert (tmp_path / "output1.csv").exists()
-        assert (tmp_path / "output2.csv").exists()
+            # Verify both outputs exist
+            assert (tmp_path / "output1.csv").exists()
+            assert (tmp_path / "output2.csv").exists()
+        finally:
+            # Clean up sys.path
+            sys.path.remove(str(tmp_path))

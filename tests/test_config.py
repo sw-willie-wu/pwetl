@@ -69,7 +69,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="配置缺少 'sources' 欄位"):
+        with pytest.raises(ValueError, match="sources.*Field required"):
             ConfigLoader.load(config_file)
 
     def test_validate_missing_transform(self, tmp_path):
@@ -85,7 +85,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="配置缺少 'transform' 欄位"):
+        with pytest.raises(ValueError, match="transform.*Field required"):
             ConfigLoader.load(config_file)
 
     def test_validate_missing_sinks(self, tmp_path):
@@ -99,7 +99,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="配置缺少 'sinks' 欄位"):
+        with pytest.raises(ValueError, match="sinks.*Field required"):
             ConfigLoader.load(config_file)
 
     def test_validate_empty_sources(self, tmp_path):
@@ -114,7 +114,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="'sources' 不能為空"):
+        with pytest.raises(ValueError, match="sources.*at least 1 item"):
             ConfigLoader.load(config_file)
 
     def test_validate_source_missing_name(self, tmp_path):
@@ -131,7 +131,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="缺少 'name' 欄位"):
+        with pytest.raises(ValueError, match="name.*Field required"):
             ConfigLoader.load(config_file)
 
     def test_validate_source_missing_type(self, tmp_path):
@@ -148,7 +148,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="缺少 'type' 欄位"):
+        with pytest.raises(ValueError, match="type.*Field required"):
             ConfigLoader.load(config_file)
 
     def test_validate_duplicate_source_names(self, tmp_path):
@@ -184,7 +184,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="'transform' 格式錯誤"):
+        with pytest.raises(ValueError, match="Transform 格式錯誤"):
             ConfigLoader.load(config_file)
 
     def test_env_var_substitution(self, tmp_path):
