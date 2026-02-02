@@ -45,6 +45,49 @@ class BaseSource(ABC):
         for key, default in self.optional_config.items():
             self.config.setdefault(key, default)
 
+    def _validate_schema_data(self, data: List[Dict[str, Any]], schema_config: Dict) -> None:
+        """驗證資料是否符合 schema。
+        
+        Args:
+            data: 資料列表
+            schema_config: Schema 配置
+            
+        Raises:
+            ValueError: 當資料不符合 schema 時
+        """
+        if not data or not schema_config:
+            return
+            
+        # 檢查第一筆資料作為樣本
+        sample = data[0]
+        errors = []
+        
+        for field_name, type_def in schema_config.items():
+            # 跳過嵌套物件（dict）
+            if isinstance(type_def, dict):
+                continue
+                
+            value = sample.get(field_name)
+            
+            # 檢查是否為 null 且不是 Optional
+            if value is None:
+                # 檢查是否為 Optional 型態
+                is_optional = (
+                    isinstance(type_def, str) and 
+                    (type_def.endswith('?') or type_def.startswith('Optional['))
+                )
+                
+                if not is_optional:
+                    errors.append(
+                        f"欄位 '{field_name}' 的值為 null，但 schema 定義為 '{type_def}' (非 Optional)\n"
+                        f"  提示: 如果允許 null 值，請使用 '{type_def}?' 或 'Optional[{type_def}]'"
+                    )
+        
+        if errors:
+            error_msg = "資料驗證失敗:\n" + "\n".join(errors)
+            error_msg += f"\n\n檢查的資料樣本: {sample}"
+            raise ValueError(error_msg)
+
     @abstractmethod
     def read(self) -> pw.Table:
         """讀取資料並回傳 Pathway Table。

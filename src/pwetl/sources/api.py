@@ -151,11 +151,21 @@ class APISource(BaseSource):
 
         Returns:
             Pathway Table
+            
+        Raises:
+            ValueError: 當資料不符合 schema 時
         """
         # 建立暫存 JSONL 檔案（Pathway 需要從檔案讀取）
         import tempfile
         import json
         import os
+
+        # 解析 Schema
+        schema = self._get_schema()
+        
+        # 如果有 schema，驗證資料
+        if schema:
+            self._validate_schema_data(data, self.config.get('schema', {}))
 
         # 建立暫存檔案
         fd, temp_path = tempfile.mkstemp(suffix='.jsonl', text=True)
@@ -166,8 +176,6 @@ class APISource(BaseSource):
                 for item in data:
                     f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
-            # 解析 Schema
-            schema = self._get_schema()
             mode = self.config['mode']
 
             # 讀取為 Pathway Table
