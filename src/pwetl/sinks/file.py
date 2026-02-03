@@ -17,6 +17,12 @@ class FileSink(BaseSink):
         'format': 'csv',  # 預設為 CSV
     }
 
+    def __init__(self, name: str, config: dict):
+        """初始化 FileSink。"""
+        super().__init__(name, config)
+        self._jsonl_temp_path = None
+        self._json_output_path = None
+
     # 支援的檔案格式
     SUPPORTED_FORMATS = ['csv', 'json', 'jsonl', 'parquet']
 
@@ -60,9 +66,12 @@ class FileSink(BaseSink):
         pw.io.csv.write(table, path)
 
     def _write_json(self, table: pw.Table, path: str) -> None:
-        """寫入 JSON 檔案。"""
-        # JSON 使用 JSONL 格式（每行一個物件）
-        pw.io.jsonlines.write(table, path)
+        """寫入 JSON 檔案（數組格式）。"""
+        # 先寫入 JSONL 格式
+        self._jsonl_temp_path = path + '.jsonl_temp'
+        pw.io.jsonlines.write(table, self._jsonl_temp_path)
+        # 記錄需要後處理的 JSON 文件
+        self._json_output_path = path
 
     def _write_jsonl(self, table: pw.Table, path: str) -> None:
         """寫入 JSONL 檔案。"""
@@ -71,3 +80,23 @@ class FileSink(BaseSink):
     def _write_parquet(self, table: pw.Table, path: str) -> None:
         """寫入 Parquet 檔案。"""
         pw.io.parquet.write(table, path)
+
+    def teardown(self) -> None:
+        """清理並後處理（將 JSONL 轉換為 JSON 數組）。"""
+        if self._jsonl_temp_path and self._json_output_path:
+            import json
+            
+            # 讀取 JSONL 文件並轉換為 JSON 數組
+            objects = []
+            with open(self._jsonl_temp_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        objects.append(json.loads(line))
+            
+            # 寫入 JSON 數組
+            with open(self._json_output_path, 'w', encoding='utf-8') as f:
+                json.dump(objects, f, ensure_ascii=False, indent=2)
+            
+            # 刪除臨時文件
+            Path(self._jsonl_temp_path).unlink(missing_ok=True)
