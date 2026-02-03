@@ -57,26 +57,31 @@ class SourceFactory:
 
         Args:
             name: Source 名稱
-            config: 必須包含 'module' 和 'class' 欄位
+            config: 必須包含 'module' 欄位，格式為 'module_path.ClassName'
 
         Returns:
             BaseSource 實例
 
         Raises:
-            ValueError: 當配置缺少必要欄位時
+            ValueError: 當配置缺少必要欄位或格式錯誤時
             TypeError: 當類別不是 BaseSource 的子類時
         """
         if 'module' not in config:
             raise ValueError(
                 f"自定義 Source '{name}' 配置缺少 'module' 欄位"
             )
-        if 'class' not in config:
-            raise ValueError(
-                f"自定義 Source '{name}' 配置缺少 'class' 欄位"
-            )
 
-        module_path = config['module']
-        class_name = config['class']
+        module_spec = config['module']
+        
+        # 解析 module.ClassName 格式
+        if '.' not in module_spec:
+            raise ValueError(
+                f"自定義 Source '{name}' 的 'module' 必須是 'module_path.ClassName' 格式"
+            )
+        
+        parts = module_spec.rsplit('.', 1)
+        module_path = parts[0]
+        class_name = parts[1]
 
         # 動態載入類別
         source_class = DynamicLoader.load_class(module_path, class_name)
@@ -137,26 +142,31 @@ class SinkFactory:
 
         Args:
             name: Sink 名稱
-            config: 必須包含 'module' 和 'class' 欄位
+            config: 必須包含 'module' 欄位，格式為 'module_path.ClassName'
 
         Returns:
             BaseSink 實例
 
         Raises:
-            ValueError: 當配置缺少必要欄位時
+            ValueError: 當配置缺少必要欄位或格式錯誤時
             TypeError: 當類別不是 BaseSink 的子類時
         """
         if 'module' not in config:
             raise ValueError(
                 f"自定義 Sink '{name}' 配置缺少 'module' 欄位"
             )
-        if 'class' not in config:
-            raise ValueError(
-                f"自定義 Sink '{name}' 配置缺少 'class' 欄位"
-            )
 
-        module_path = config['module']
-        class_name = config['class']
+        module_spec = config['module']
+        
+        # 解析 module.ClassName 格式
+        if '.' not in module_spec:
+            raise ValueError(
+                f"自定義 Sink '{name}' 的 'module' 必須是 'module_path.ClassName' 格式"
+            )
+        
+        parts = module_spec.rsplit('.', 1)
+        module_path = parts[0]
+        class_name = parts[1]
 
         # 動態載入類別
         sink_class = DynamicLoader.load_class(module_path, class_name)
