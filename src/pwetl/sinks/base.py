@@ -75,8 +75,7 @@ class BaseSink(ABC):
         """設定 schema（如果配置中有定義）。"""
         if 'schema' in self.config:
             from pwetl.utils.schema import SchemaParser
-            parser = SchemaParser(self.config['schema'])
-            self.schema_class = parser.parse()
+            self.schema_class = SchemaParser.parse(self.config['schema'])
 
     def _apply_schema(self, table: pw.Table) -> pw.Table:
         """應用 schema 到 table（如果有定義 schema）。
