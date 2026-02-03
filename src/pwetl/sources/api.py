@@ -162,10 +162,10 @@ class APISource(BaseSource):
 
         # 解析 Schema
         schema = self._get_schema()
+        schema_config = self.config.get('schema', {})
         
-        # 如果有 schema，驗證資料
-        if schema:
-            self._validate_schema_data(data, self.config.get('schema', {}))
+        # 統一的驗證和處理入口
+        data = self._process_data_with_validation(data, schema_config)
 
         # 建立暫存檔案
         fd, temp_path = tempfile.mkstemp(suffix='.jsonl', text=True)

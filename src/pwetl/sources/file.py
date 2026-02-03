@@ -1,7 +1,7 @@
 """File-based data sources."""
 import re
 from pathlib import Path
-from typing import Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 import pathway as pw
 from pwetl.sources.base import BaseSource
@@ -57,6 +57,13 @@ class FileSource(BaseSource):
 
         # 解析 Schema
         schema = self._get_schema()
+        
+        # 檢查是否使用 strict 驗證模式
+        validation_mode = self._get_validation_mode()
+        
+        # strict 模式：先讀取資料、驗證、轉換，再建立 Table
+        if validation_mode == 'strict' and schema:
+            return self._read_with_strict_validation(path, file_format, schema)
 
         # 判斷是資料夾還是檔案
         if path_obj.is_dir():
@@ -177,6 +184,116 @@ class FileSource(BaseSource):
         if schema_config:
             return SchemaParser.parse(schema_config)
         return None
+    
+    def _read_with_strict_validation(
+        self, path: str, file_format: str, schema: Type[pw.Schema]
+    ) -> pw.Table:
+        """使用 strict 模式讀取：先載入資料、驗證、轉換，再建立 Table。
+        
+        Args:
+            path: 檔案或資料夾路徑
+            file_format: 檔案格式
+            schema: Pathway Schema
+            
+        Returns:
+            驗證並標準化後的 Pathway Table
+        """
+        import json
+        
+        # 讀取原始資料
+        path_obj = Path(path)
+        schema_config = self.config.get('schema', {})
+        
+        if path_obj.is_dir():
+            # 讀取資料夾中的所有檔案
+            raw_data = []
+            pattern = f"*.{file_format}"
+            for file_path in path_obj.glob(pattern):
+                raw_data.extend(self._load_file_data(str(file_path), file_format))
+        else:
+            raw_data = self._load_file_data(path, file_format)
+        
+        # 統一的驗證和處理入口
+        normalized_data = self._process_data_with_validation(raw_data, schema_config)
+        
+        # 用處理後的資料建立 Table
+        simple_schema = self._create_simple_schema(schema)
+        
+        # 將 dict 轉成 schema 需要的格式
+        rows = []
+        field_names = list(simple_schema.__annotations__.keys())
+        for row_dict in normalized_data:
+            # 按 schema 順序取值，轉成 tuple
+            row_tuple = tuple(row_dict.get(field, None) for field in field_names)
+            rows.append(row_tuple)
+        
+        return pw.debug.table_from_rows(schema=simple_schema, rows=rows)
+    
+    def _load_file_data(self, file_path: str, file_format: str) -> List[Dict[str, Any]]:
+        """載入檔案資料為 Python 物件。
+        
+        Args:
+            file_path: 檔案路徑
+            file_format: 檔案格式
+            
+        Returns:
+            資料列表
+        """
+        import csv
+        import json
+        
+        if file_format == 'csv':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return list(csv.DictReader(f))
+        
+        elif file_format in ('json', 'jsonl'):
+            data = []
+            with open(file_path, 'r', encoding='utf-8') as f:
+                if file_format == 'json':
+                    content = json.load(f)
+                    # 如果是陣列就展開，否則當成單一物件
+                    if isinstance(content, list):
+                        data = content
+                    else:
+                        data = [content]
+                else:  # jsonl
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            data.append(json.loads(line))
+            return data
+        
+        elif file_format == 'parquet':
+            # Parquet 需要用 pandas 或 pyarrow 讀取
+            try:
+                import pandas as pd
+                df = pd.read_parquet(file_path)
+                return df.to_dict('records')
+            except ImportError:
+                raise ImportError("strict 模式讀取 Parquet 需要安裝 pandas")
+        
+        return []
+    
+    def _create_simple_schema(self, original_schema: Type[pw.Schema]) -> Type[pw.Schema]:
+        """建立簡化的 schema（特殊型別已經轉成基本型別）。
+        
+        Args:
+            original_schema: 原始 schema
+            
+        Returns:
+            簡化的 schema（只包含基本型別）
+        """
+        # 從 original_schema 取得欄位，但型別簡化
+        # 因為資料已經 dump 成基本型別，所以大部分欄位可以用 Any 或推導
+        # 最簡單的方式是不指定 schema，讓 Pathway 自動推導
+        # 但為了保持欄位順序和型別一致，我們從 config 重新解析
+        schema_config = self.config.get('schema', {})
+        if not schema_config:
+            return None
+        
+        # 使用已經處理好的映射邏輯
+        from pwetl.utils.schema import SchemaParser
+        return SchemaParser.parse(schema_config)
 
     def _read_csv(self, path: str, schema: Optional[Type[pw.Schema]]) -> pw.Table:
         """讀取 CSV 檔案。"""
