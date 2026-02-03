@@ -1,4 +1,5 @@
 """ETL Engine。"""
+
 import sys
 from pathlib import Path
 from typing import Union
@@ -9,6 +10,9 @@ from pwetl.core.registry import SinkFactory, SourceFactory
 from pwetl.utils.env import load_env_file
 from pwetl.utils.loader import TransformLoader
 from pwetl.utils.logger import get_logger
+
+
+LOGGER = get_logger()
 
 
 class ETLEngine:
@@ -36,8 +40,8 @@ class ETLEngine:
         self.config_path = Path(config_path).resolve()
         self.env_file = env_file
         self.verbose = verbose
-        self.config = None
-        self.pipeline = None
+        self.config: dict | None = None
+        self.pipeline: Pipeline | None = None
 
         # 將配置檔案所在目錄加入 Python 路徑，以便載入相對模組
         config_dir = str(self.config_path.parent)
@@ -51,29 +55,29 @@ class ETLEngine:
             Exception: 當執行失敗時
         """
         try:
-            # 載入環境變數
-            if self.verbose:
-                print("🔐 載入環境變數...")
+            LOGGER.debug("Start ETL Engine execution...")
+            LOGGER.debug("Loading environment variables...")
             self._load_env()
 
             # 載入配置
-            if self.verbose:
-                print("📋 載入配置...")
+            LOGGER.debug("Loading yaml configuration...")
             self._load_config()
 
             # 建立 Pipeline
-            if self.verbose:
-                print("🏗️  建立 Pipeline...")
+            LOGGER.debug("Initializing Pipeline structure...")
             self._build_pipeline()
 
             # 執行 Pipeline
+            if self.pipeline is None:
+                raise RuntimeError("Pipeline 尚未建立，無法執行。")
             self.pipeline.run()
 
         except Exception as e:
-            print(f"\n❌ 執行失敗: {e}")
+            LOGGER.error("Execution failed: %s", e)
             if self.verbose:
                 import traceback
-                print("\n詳細錯誤訊息:")
+
+                LOGGER.error("\nTraceback:")
                 traceback.print_exc()
             raise
 
@@ -104,6 +108,7 @@ class ETLEngine:
             print(f"\n❌ 驗證失敗: {e}")
             if self.verbose:
                 import traceback
+
                 print("\n詳細錯誤訊息:")
                 traceback.print_exc()
             raise
@@ -114,7 +119,7 @@ class ETLEngine:
             load_env_file(self.env_file)
         else:
             # 自動尋找 .env 檔案
-            load_env_file('.env')
+            load_env_file(".env")
 
     def _load_config(self) -> None:
         """載入配置。
@@ -134,29 +139,29 @@ class ETLEngine:
             RuntimeError: 當 Pipeline 建立失敗時
         """
         try:
+            if self.config is None:
+                raise RuntimeError("配置尚未載入，無法建立 Pipeline。")
+
             # 建立 Sources
             sources = {}
-            for source_config in self.config['sources']:
-                name = source_config['name']
+            for source_config in self.config["sources"]:
+                name = source_config["name"]
                 sources[name] = SourceFactory.create(name, source_config)
-
-            if self.verbose:
-                print(f"  - 建立了 {len(sources)} 個 Source: {', '.join(sources.keys())}")
-
+            LOGGER.debug(
+                "  Find %d Sources: %s", len(sources), ", ".join(sources.keys())
+            )
             # 載入 Transform
-            transform = TransformLoader.load(self.config['transform'])
-
-            if self.verbose:
-                print(f"  - 載入 Transform: {self.config['transform']}")
+            transform = TransformLoader.load(self.config["transform"])
+            LOGGER.debug("  Find Transform module: %s", self.config["transform"])
 
             # 建立 Sinks
             sinks = {}
-            for sink_config in self.config['sinks']:
-                name = sink_config['name']
+            for sink_config in self.config["sinks"]:
+                name = sink_config["name"]
                 sinks[name] = SinkFactory.create(name, sink_config)
-
-            if self.verbose:
-                print(f"  - 建立了 {len(sinks)} 個 Sink: {', '.join(sinks.keys())}")
+            LOGGER.debug(
+                "  Find %d Sinks: %s", len(sinks), ", ".join(sinks.keys())
+            )
 
             # 建立 Pipeline
             self.pipeline = Pipeline(
@@ -165,6 +170,7 @@ class ETLEngine:
                 sinks=sinks,
                 verbose=self.verbose,
             )
+            # LOGGER.debug("Start build Pipeline flow...")
 
         except Exception as e:
-            raise RuntimeError(f"Pipeline 建立失敗: {e}") from e
+            raise RuntimeError(f"Build Pipeline failed: {e}") from e

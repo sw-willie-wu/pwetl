@@ -17,24 +17,17 @@ class ColoredFormatter(logging.Formatter):
         "RESET": "\033[0m",  # 重置
     }
 
-    # Emoji 對應
-    EMOJIS = {
-        "DEBUG": "🔍",
-        "INFO": "ℹ️ ",
-        "WARNING": "⚠️ ",
-        "ERROR": "❌",
-        "CRITICAL": "🔥",
-    }
-
     def format(self, record: logging.LogRecord) -> str:
         """格式化日誌記錄。"""
         # 獲取顏色和 emoji
         color = self.COLORS.get(record.levelname, self.COLORS["RESET"])
-        emoji = self.EMOJIS.get(record.levelname, "")
         reset = self.COLORS["RESET"]
 
+        # 格式化時間
+        asctime = self.formatTime(record, self.datefmt)
+
         # 格式化訊息
-        log_fmt = f"{color}{emoji} {record.getMessage()}{reset}"
+        log_fmt = f"{color}{asctime} - {record.levelname} - {record.name} - {record.getMessage()}{reset}"
 
         # 如果有異常資訊，添加到訊息後面
         if record.exc_info:
