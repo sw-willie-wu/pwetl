@@ -1,35 +1,39 @@
-"""日誌配置模組。"""
+"""Logging configuration module."""
+
 import logging
 import sys
 from typing import Optional
 
 
 class ColoredFormatter(logging.Formatter):
-    """彩色日誌格式化器。"""
+    """Colored log formatter."""
 
-    # ANSI 顏色代碼
+    # ANSI color codes
     COLORS = {
-        "DEBUG": "\033[36m",  # 青色
-        "INFO": "\033[32m",  # 綠色
-        "WARNING": "\033[33m",  # 黃色
-        "ERROR": "\033[31m",  # 紅色
-        "CRITICAL": "\033[35m",  # 紫色
-        "RESET": "\033[0m",  # 重置
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
+        "CRITICAL": "\033[35m",  # Magenta
+        "RESET": "\033[0m",  # Reset
     }
 
     def format(self, record: logging.LogRecord) -> str:
-        """格式化日誌記錄。"""
-        # 獲取顏色和 emoji
+        """Format log record."""
+        # Get color for level only
         color = self.COLORS.get(record.levelname, self.COLORS["RESET"])
         reset = self.COLORS["RESET"]
 
-        # 格式化時間
+        # Format time
         asctime = self.formatTime(record, self.datefmt)
 
-        # 格式化訊息
-        log_fmt = f"{color}{asctime} - {record.levelname} - {record.name} - {record.getMessage()}{reset}"
+        # Format message with color only on level
+        log_fmt = (
+            f"{asctime} - {color}{record.levelname}{reset} - "
+            f"{record.name} - {record.getMessage()}"
+        )
 
-        # 如果有異常資訊，添加到訊息後面
+        # If there's exception info, add it after the message
         if record.exc_info:
             log_fmt += "\n" + self.formatException(record.exc_info)
 
@@ -40,54 +44,107 @@ def setup_logger(
     name: str = "pwetl",
     level: int = logging.INFO,
     verbose: bool = False,
+    log_config: Optional[str] = None,
 ) -> logging.Logger:
-    """設置日誌記錄器。
+    """Set up logger.
 
     Args:
-        name: Logger 名稱
-        level: 日誌級別
-        verbose: 是否顯示詳細訊息（會降低到 DEBUG 級別）
+        name: Logger name
+        level: Log level
+        verbose: Whether to show detailed messages (will lower to DEBUG level)
+        log_config: Path to logging configuration file (YAML or JSON format)
 
     Returns:
-        配置好的 Logger 實例
+        Configured Logger instance
     """
+    # If external log config is provided, load it
+    if log_config:
+        try:
+            from pathlib import Path
+            import logging.config as log_config_module
+            
+            config_path = Path(log_config)
+            
+            if not config_path.exists():
+                raise FileNotFoundError(f"Log config file not found: {log_config}")
+            
+            if config_path.suffix in ('.yaml', '.yml'):
+                import yaml
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                    log_config_module.dictConfig(config)
+            elif config_path.suffix == '.json':
+                import json
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    log_config_module.dictConfig(config)
+            else:
+                raise ValueError(
+                    f"Unsupported log config format: {config_path.suffix}. "
+                    "Supported formats: .yaml, .yml, .json"
+                )
+            
+            return logging.getLogger(name)
+        except Exception as e:
+            # If loading external config fails, fall back to default
+            print(f"Warning: Failed to load log config from {log_config}: {e}", file=sys.stderr)
+            print("Falling back to default logging configuration", file=sys.stderr)
+    
     logger = logging.getLogger(name)
 
-    # 避免重複添加 handler
+    # Avoid adding duplicate handlers
     if logger.handlers:
         return logger
 
-    # 設置日誌級別
+    # Set log level
     if verbose:
         logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(level)
 
-    # 創建 console handler
+    # Create console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.DEBUG)
 
-    # 設置格式化器
+    # Set formatter
     formatter = ColoredFormatter()
     console_handler.setFormatter(formatter)
 
-    # 添加 handler
+    # Add handler to pwetl logger
     logger.addHandler(console_handler)
-
-    # 防止日誌傳播到根 logger
     logger.propagate = False
+
+    # Also configure Pathway logger with same format
+    pathway_logger = logging.getLogger("pathway")
+    if not pathway_logger.handlers:
+        pathway_handler = logging.StreamHandler(sys.stdout)
+        pathway_handler.setLevel(logging.DEBUG)
+        pathway_handler.setFormatter(formatter)
+        pathway_logger.addHandler(pathway_handler)
+        pathway_logger.setLevel(logging.INFO)
+        pathway_logger.propagate = False
+
+    # Configure root logger to catch all other loggers (including Pathway internals)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    # Remove any existing handlers
+    root_logger.handlers = []
+    # Add our formatter
+    root_handler = logging.StreamHandler(sys.stdout)
+    root_handler.setFormatter(formatter)
+    root_logger.addHandler(root_handler)
 
     return logger
 
 
 def get_logger(name: Optional[str] = None) -> logging.Logger:
-    """獲取日誌記錄器。
+    """Get logger.
 
     Args:
-        name: Logger 名稱，默認為 'pwetl'
+        name: Logger name, default is 'pwetl'
 
     Returns:
-        Logger 實例
+        Logger instance
     """
     if name is None:
         name = "pwetl"
