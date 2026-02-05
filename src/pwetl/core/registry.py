@@ -1,51 +1,55 @@
 """Registry and factory for sources and sinks."""
+
 from typing import Dict, Type, Any
 from pwetl.sources.base import BaseSource
 from pwetl.sinks.base import BaseSink
 from pwetl.utils.loader import DynamicLoader
+from pwetl.core.exceptions import RegistryError
 
 
-# 全域 Registry：儲存內建和用戶註冊的 Source/Sink 類別
+# Global Registry: Stores built-in and user-registered Source/Sink classes
 SOURCE_REGISTRY: Dict[str, Type[BaseSource]] = {}
 SINK_REGISTRY: Dict[str, Type[BaseSink]] = {}
 
 
 class SourceFactory:
-    """Source 工廠類別。
+    """Source factory class.
 
-    負責根據配置建立 Source 實例。
+    Responsible for creating Source instances based on configuration.
     """
 
     @staticmethod
     def create(name: str, config: Dict[str, Any]) -> BaseSource:
-        """建立 Source 實例。
+        """Create Source instance.
 
         Args:
-            name: Source 名稱
-            config: Source 配置，必須包含 'type' 欄位
+            name: Source name
+            config: Source configuration, must contain 'type' field
 
         Returns:
-            BaseSource 實例
+            BaseSource instance
 
         Raises:
-            ValueError: 當配置缺少 'type' 欄位或 type 不存在時
-            TypeError: 當自定義類別不是 BaseSource 的子類時
+            RegistryError: When configuration is missing 'type' field or type does not exist
+            TypeError: When custom class is not a subclass of BaseSource
         """
-        if 'type' not in config:
-            raise ValueError(f"Source '{name}' 配置缺少 'type' 欄位")
+        if "type" not in config:
+            raise RegistryError(
+                f"Source '{name}' configuration is missing 'type' field"
+            )
 
-        source_type = config['type']
+        source_type = config["type"]
 
-        # 處理自定義 Source（動態載入）
-        if source_type == 'custom':
+        # Handle custom Source (dynamic loading)
+        if source_type == "custom":
             return SourceFactory._create_custom(name, config)
 
-        # 處理內建 Source（從 Registry 載入）
+        # Handle built-in Source (load from Registry)
         if source_type not in SOURCE_REGISTRY:
-            raise ValueError(
-                f"未知的 Source 類型: '{source_type}'\n"
-                f"可用的類型: {', '.join(SOURCE_REGISTRY.keys())}\n"
-                f"或使用 'custom' 類型並指定 'module' 和 'class'"
+            raise RegistryError(
+                f"Unknown Source type: '{source_type}'\n"
+                f"Available types: {', '.join(SOURCE_REGISTRY.keys())}\n"
+                f"Or use 'custom' type and specify 'module' and 'class'"
             )
 
         source_class = SOURCE_REGISTRY[source_type]
@@ -53,79 +57,82 @@ class SourceFactory:
 
     @staticmethod
     def _create_custom(name: str, config: Dict[str, Any]) -> BaseSource:
-        """建立自定義 Source。
+        """Create custom Source.
 
         Args:
-            name: Source 名稱
-            config: 必須包含 'module' 和 'class' 欄位
+            name: Source name
+            config: Must contain 'module' field in format 'module_path.ClassName'
 
         Returns:
-            BaseSource 實例
+            BaseSource instance
 
         Raises:
-            ValueError: 當配置缺少必要欄位時
-            TypeError: 當類別不是 BaseSource 的子類時
+            RegistryError: When configuration is missing required fields or format is invalid
+            TypeError: When class is not a subclass of BaseSource
         """
-        if 'module' not in config:
-            raise ValueError(
-                f"自定義 Source '{name}' 配置缺少 'module' 欄位"
-            )
-        if 'class' not in config:
-            raise ValueError(
-                f"自定義 Source '{name}' 配置缺少 'class' 欄位"
+        if "module" not in config:
+            raise RegistryError(
+                f"Custom Source '{name}' configuration is missing 'module' field"
             )
 
-        module_path = config['module']
-        class_name = config['class']
+        module_spec = config["module"]
 
-        # 動態載入類別
+        # Parse module.ClassName format
+        if "." not in module_spec:
+            raise RegistryError(
+                f"Custom Source '{name}' 'module' must be in 'module_path.ClassName' format"
+            )
+
+        parts = module_spec.rsplit(".", 1)
+        module_path = parts[0]
+        class_name = parts[1]
+
+        # Dynamically load class
         source_class = DynamicLoader.load_class(module_path, class_name)
 
-        # 驗證是否為 BaseSource 的子類
+        # Validate that it's a subclass of BaseSource
         if not issubclass(source_class, BaseSource):
-            raise TypeError(
-                f"類別 '{class_name}' 必須繼承自 BaseSource"
-            )
+            raise TypeError(f"Class '{class_name}' must inherit from BaseSource")
 
         return source_class(name=name, config=config)
 
 
 class SinkFactory:
-    """Sink 工廠類別。
+    """Sink factory class.
 
-    負責根據配置建立 Sink 實例。
+    Responsible for creating Sink instances based on configuration.
     """
 
     @staticmethod
     def create(name: str, config: Dict[str, Any]) -> BaseSink:
-        """建立 Sink 實例。
+        """Create Sink instance.
 
         Args:
-            name: Sink 名稱
-            config: Sink 配置，必須包含 'type' 欄位
+            name: Sink name
+            config: Sink configuration, must contain 'type' field
 
         Returns:
-            BaseSink 實例
+            BaseSink instance
 
         Raises:
-            ValueError: 當配置缺少 'type' 欄位或 type 不存在時
-            TypeError: 當自定義類別不是 BaseSink 的子類時
+            RegistryError: When configuration is missing 'type' field or type does not exist
+            TypeError: When custom class is not a subclass of BaseSink
         """
-        if 'type' not in config:
-            raise ValueError(f"Sink '{name}' 配置缺少 'type' 欄位")
+        if "type" not in config:
+            raise RegistryError(f"Sink '{name}' configuration is missing 'type' field")
 
-        sink_type = config['type']
+        sink_type = config["type"]
 
-        # 處理自定義 Sink（動態載入）
-        if sink_type == 'custom':
+        # Handle custom Sink (dynamic loading)
+        if sink_type == "custom":
             return SinkFactory._create_custom(name, config)
 
-        # 處理內建 Sink（從 Registry 載入）
+        # Handle built-in Sink (load from Registry)
         if sink_type not in SINK_REGISTRY:
-            raise ValueError(
-                f"未知的 Sink 類型: '{sink_type}'\n"
-                f"可用的類型: {', '.join(SINK_REGISTRY.keys())}\n"
-                f"或使用 'custom' 類型並指定 'module' 和 'class'"
+            raise RegistryError(
+                f"Unknown Sink type: '{sink_type}'\n"
+                f"Available types: {', '.join(SINK_REGISTRY.keys())}\n"
+                f"Or use 'custom' type and specify 'module' and 'class'"
             )
 
         sink_class = SINK_REGISTRY[sink_type]
@@ -133,38 +140,41 @@ class SinkFactory:
 
     @staticmethod
     def _create_custom(name: str, config: Dict[str, Any]) -> BaseSink:
-        """建立自定義 Sink。
+        """Create custom Sink.
 
         Args:
-            name: Sink 名稱
-            config: 必須包含 'module' 和 'class' 欄位
+            name: Sink name
+            config: Must contain 'module' field in format 'module_path.ClassName'
 
         Returns:
-            BaseSink 實例
+            BaseSink instance
 
         Raises:
-            ValueError: 當配置缺少必要欄位時
-            TypeError: 當類別不是 BaseSink 的子類時
+            RegistryError: When configuration is missing required fields or format is invalid
+            TypeError: When class is not a subclass of BaseSink
         """
-        if 'module' not in config:
-            raise ValueError(
-                f"自定義 Sink '{name}' 配置缺少 'module' 欄位"
-            )
-        if 'class' not in config:
-            raise ValueError(
-                f"自定義 Sink '{name}' 配置缺少 'class' 欄位"
+        if "module" not in config:
+            raise RegistryError(
+                f"Custom Sink '{name}' configuration is missing 'module' field"
             )
 
-        module_path = config['module']
-        class_name = config['class']
+        module_spec = config["module"]
 
-        # 動態載入類別
+        # Parse module.ClassName format
+        if "." not in module_spec:
+            raise RegistryError(
+                f"Custom Sink '{name}' 'module' must be in 'module_path.ClassName' format"
+            )
+
+        parts = module_spec.rsplit(".", 1)
+        module_path = parts[0]
+        class_name = parts[1]
+
+        # Dynamically load class
         sink_class = DynamicLoader.load_class(module_path, class_name)
 
-        # 驗證是否為 BaseSink 的子類
+        # Validate that it's a subclass of BaseSink
         if not issubclass(sink_class, BaseSink):
-            raise TypeError(
-                f"類別 '{class_name}' 必須繼承自 BaseSink"
-            )
+            raise TypeError(f"Class '{class_name}' must inherit from BaseSink")
 
         return sink_class(name=name, config=config)

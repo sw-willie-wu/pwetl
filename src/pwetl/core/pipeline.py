@@ -1,15 +1,20 @@
-"""ETL Pipeline。"""
+"""ETL Pipeline."""
+
 from typing import Dict
 import pathway as pw
 from pwetl.sources.base import BaseSource
 from pwetl.sinks.base import BaseSink
 from pwetl.transforms.base import BaseTransform
+from pwetl.utils.logger import get_logger
+
+
+LOGGER = get_logger()
 
 
 class Pipeline:
-    """ETL Pipeline。
+    """ETL Pipeline.
 
-    負責編排 Source → Transform → Sink 的執行流程。
+    Orchestrates the execution flow: Source → Transform → Sink.
     """
 
     def __init__(
@@ -19,13 +24,13 @@ class Pipeline:
         sinks: Dict[str, BaseSink],
         verbose: bool = False,
     ):
-        """初始化 Pipeline。
+        """Initialize Pipeline.
 
         Args:
-            sources: Source 實例字典，格式為 {name: BaseSource}
-            transform: Transform 實例
-            sinks: Sink 實例字典，格式為 {name: BaseSink}
-            verbose: 是否顯示詳細輸出
+            sources: Dictionary of Source instances, format: {name: BaseSource}
+            transform: Transform instance
+            sinks: Dictionary of Sink instances, format: {name: BaseSink}
+            verbose: Whether to show detailed output
         """
         self.sources = sources
         self.transform = transform
@@ -33,179 +38,154 @@ class Pipeline:
         self.verbose = verbose
 
     def run(self) -> None:
-        """執行 Pipeline。
+        """Execute Pipeline.
 
-        執行順序：
-        1. 初始化所有組件（setup）
-        2. 從所有 Sources 讀取資料
-        3. Transform 處理資料
-        4. 寫入所有 Sinks
-        5. 執行 Pathway
-        6. 清理所有組件（teardown）
+        Execution order:
+        1. Initialize all components (setup)
+        2. Read data from all Sources
+        3. Process data with Transform
+        4. Write to all Sinks
+        5. Run Pathway
+        6. Clean up all components (teardown)
 
         Raises:
-            RuntimeError: 當任何階段失敗時
+            RuntimeError: When any stage fails
         """
         try:
-            # 階段 1: 初始化
-            if self.verbose:
-                print("🔧 初始化組件...")
+            # Stage 1: Initialize
+            LOGGER.debug("Setup Pipeline workflow...")
             self._setup_all()
 
-            # 階段 2: Source - 讀取資料
-            if self.verbose:
-                print(f"📥 從 {len(self.sources)} 個 Source 讀取資料...")
+            # Stage 2: Source - Read data
             tables = self._read_sources()
 
-            # 階段 3: Transform - 處理資料
-            if self.verbose:
-                print("⚙️  執行 Transform...")
+            # Stage 3: Transform - Process data
+            LOGGER.debug("  Processing with Transform module...")
             result_tables = self._transform(tables)
 
-            # 階段 4: Sink - 寫入資料
-            if self.verbose:
-                print(f"📤 寫入到 {len(self.sinks)} 個 Sink...")
+            # Stage 4: Sink - Write data
             self._write_sinks(result_tables)
 
-            # 執行 Pathway
-            if self.verbose:
-                print("🚀 執行 Pathway...")
-            pw.run()
-
-            if self.verbose:
-                print("✅ Pipeline 執行完成")
+            # Run Pathway
+            LOGGER.debug("Setup done, start pathway Pipeline...")
+            pw.run(monitoring_level=pw.MonitoringLevel.NONE)
+            LOGGER.debug("Completed execution.")
 
         finally:
-            # 階段 5: 清理
-            if self.verbose:
-                print("🧹 清理資源...")
+            LOGGER.debug("Cleaning up resources...")
             self._teardown_all()
 
     def _setup_all(self) -> None:
-        """初始化所有組件。"""
-        # 初始化 Sources
+        """Initialize all components."""
+        # Initialize Sources
         for name, source in self.sources.items():
             try:
                 source.setup()
             except Exception as e:
-                raise RuntimeError(
-                    f"Source '{name}' 初始化失敗: {e}"
-                ) from e
+                raise RuntimeError(f"Source '{name}' initialization failed: {e}") from e
 
-        # 初始化 Transform
+        # Initialize Transform
         try:
             self.transform.setup()
         except Exception as e:
-            raise RuntimeError(f"Transform 初始化失敗: {e}") from e
+            raise RuntimeError(f"Transform initialization failed: {e}") from e
 
-        # 初始化 Sinks
+        # Initialize Sinks
         for name, sink in self.sinks.items():
             try:
                 sink.setup()
             except Exception as e:
-                raise RuntimeError(
-                    f"Sink '{name}' 初始化失敗: {e}"
-                ) from e
+                raise RuntimeError(f"Sink '{name}' initialization failed: {e}") from e
 
     def _read_sources(self) -> Dict[str, pw.Table]:
-        """從所有 Sources 讀取資料。
+        """Read data from all Sources.
 
         Returns:
-            資料表字典，格式為 {source_name: pw.Table}
+            Dictionary of tables, format: {source_name: pw.Table}
 
         Raises:
-            RuntimeError: 當任何 Source 讀取失敗時
+            RuntimeError: When any Source read fails
         """
         tables = {}
 
         for name, source in self.sources.items():
             try:
-                if self.verbose:
-                    print(f"  - 讀取 Source '{name}'...")
+                LOGGER.debug("  Read Source '%s'...", name)
                 tables[name] = source.read()
             except Exception as e:
-                raise RuntimeError(
-                    f"Source '{name}' 讀取失敗: {e}"
-                ) from e
+                raise RuntimeError(f"Source '{name}' read failed: {e}") from e
 
         return tables
 
     def _transform(self, tables: Dict[str, pw.Table]) -> Dict[str, pw.Table]:
-        """執行 Transform。
+        """Execute Transform.
 
         Args:
-            tables: 輸入資料表字典
+            tables: Dictionary of input tables
 
         Returns:
-            輸出資料表字典
+            Dictionary of output tables
 
         Raises:
-            RuntimeError: 當 Transform 處理失敗時
+            RuntimeError: When Transform processing fails
         """
         try:
             result_tables = self.transform.transform(tables)
 
-            # 驗證回傳值
+            # Validate return value
             if not isinstance(result_tables, dict):
                 raise TypeError(
-                    "Transform 必須回傳 Dict[str, pw.Table]，"
-                    f"但回傳了 {type(result_tables)}"
+                    "Transform must return Dict[str, pw.Table], "
+                    f"but returned {type(result_tables)}"
                 )
 
             return result_tables
 
         except Exception as e:
-            raise RuntimeError(f"Transform 處理失敗: {e}") from e
+            raise RuntimeError(f"Transform processing failed: {e}") from e
 
     def _write_sinks(self, result_tables: Dict[str, pw.Table]) -> None:
-        """寫入所有 Sinks。
+        """Write to all Sinks.
 
         Args:
-            result_tables: 要寫入的資料表字典
+            result_tables: Dictionary of tables to write
 
         Raises:
-            RuntimeError: 當任何 Sink 寫入失敗時
+            RuntimeError: When any Sink write fails
         """
         for name, sink in self.sinks.items():
             try:
                 if name not in result_tables:
                     raise ValueError(
-                        f"Transform 沒有產生 Sink '{name}' 需要的資料表。\n"
-                        f"可用的資料表: {', '.join(result_tables.keys())}"
+                        f"Transform did not produce required table for Sink '{name}'.\n"
+                        f"Available tables: {', '.join(result_tables.keys())}"
                     )
-
-                if self.verbose:
-                    print(f"  - 寫入 Sink '{name}'...")
+                LOGGER.debug("  Write Sink '%s'...", name)
 
                 table = result_tables[name]
                 sink.write(table)
 
             except Exception as e:
-                raise RuntimeError(
-                    f"Sink '{name}' 寫入失敗: {e}"
-                ) from e
+                raise RuntimeError(f"Sink '{name}' write failed: {e}") from e
 
     def _teardown_all(self) -> None:
-        """清理所有組件。"""
-        # 清理 Sources
+        """Clean up all components."""
+        # Clean up Sources
         for name, source in self.sources.items():
             try:
                 source.teardown()
             except Exception as e:
-                if self.verbose:
-                    print(f"⚠️  Source '{name}' 清理失敗: {e}")
+                LOGGER.debug("Source '%s' cleanup failed: %s", name, e)
 
-        # 清理 Transform
+        # Clean up Transform
         try:
             self.transform.teardown()
         except Exception as e:
-            if self.verbose:
-                print(f"⚠️  Transform 清理失敗: {e}")
+            LOGGER.debug("Transform cleanup failed: %s", e)
 
-        # 清理 Sinks
+        # Clean up Sinks
         for name, sink in self.sinks.items():
             try:
                 sink.teardown()
             except Exception as e:
-                if self.verbose:
-                    print(f"⚠️  Sink '{name}' 清理失敗: {e}")
+                LOGGER.debug("Sink '%s' cleanup failed: %s", name, e)

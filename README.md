@@ -1,43 +1,48 @@
 # pwetl
 
-一個基於 Pathway 的靈活 ETL（Extract, Transform, Load）框架。pwetl 讓你只需要編寫 Transform 類別和 YAML 配置檔，就能快速建立 ETL 服務。
+A flexible ETL (Extract, Transform, Load) framework based on Pathway. pwetl allows you to quickly build ETL services by simply writing Transform classes and YAML configuration files.
 
-## ✨ 特性
+[中文文檔](docs/README_zh.md)
 
-- **宣告式配置**：透過簡單的 YAML 配置檔定義 ETL pipeline
-- **多源多匯**：支援多個資料源和多個輸出目標
-- **豐富的資料源**：
-  - 檔案：CSV、JSON、JSONL、Parquet
-  - API：REST API（支援自訂 Headers、參數等）
-  - 資料庫：PostgreSQL、MySQL
-- **多種輸出方式**：
-  - 檔案：CSV、JSON、JSONL、Parquet
-  - 資料庫：PostgreSQL、MySQL
-  - **API：POST JSON 資料到 API endpoint**（支援重試、自訂 Headers）
-- **環境變數支援**：使用 `${VAR_NAME}` 語法安全管理敏感資訊
-- **可擴展**：輕鬆建立自訂 Source/Sink/Transform
-- **型態安全**：使用 Pathway Schema 驗證資料
-- **基於 Pathway**：利用 Pathway 強大的流式處理能力
+## Features
 
-## 📦 安裝
+- **Declarative Configuration**: Define ETL pipelines through simple YAML configuration files
+- **Multi-Source & Multi-Sink**: Support multiple data sources and output targets
+- **Rich Data Sources**:
+  - Files: CSV, JSON, JSONL (File Source)
+  - API: REST API with Static/Streaming modes
+  - Databases: PostgreSQL, MySQL
+- **Multiple Output Options**:
+  - Files: CSV, JSON, JSONL (File Sink)
+  - Databases: PostgreSQL, MySQL
+  - API: POST JSON data to API endpoints
+- **Data Validation**:
+  - Integrated Pydantic validation models
+  - Three validation modes: none (skip), sample (warn), strict (enforce)
+  - Automatic type conversion (datetime, numeric, etc.)
+- **Environment Variable Support**: Securely manage sensitive information using `${VAR_NAME}` syntax
+- **Extensible**: Easily create custom Source/Sink/Transform
+- **Powered by Pathway**: Leverage Pathway's powerful streaming capabilities
 
-**重要**：Pathway 需要 Linux 環境，請在 WSL 或 Linux 中執行。
+## Installation
+
+**Important**: Pathway requires a Linux environment. Please run in WSL or Linux.
 
 ```bash
-# 使用 uv（推薦）
+# Using uv (recommended)
 uv sync
 
-# 或使用 pip
+# Or using pip
 pip install -e .
 ```
 
-詳細安裝說明請查看 [安裝指南](docs/installation.md)。
+For detailed installation instructions, see [Installation Guide](docs/installation.md).
 
-## 🚀 快速開始
+## Quick Start
 
-### 1. 定義 Transform
+### 1. Define Transform
 
-建立 `transform.py`：
+Create `transform.py`:
 
 ```python
 from pwetl.transforms import BaseTransform
@@ -45,7 +50,7 @@ import pathway as pw
 
 class MyTransform(BaseTransform):
     def transform(self, tables):
-        """處理資料。
+        """Process data.
 
         Args:
             tables: Dict[source_name, pw.Table]
@@ -55,7 +60,7 @@ class MyTransform(BaseTransform):
         """
         users = tables['users']
 
-        # 轉換邏輯
+        # Transformation logic
         result = users.select(
             id=pw.this.id,
             name=pw.this.name.str.upper(),
@@ -64,15 +69,16 @@ class MyTransform(BaseTransform):
         return {'output': result}
 ```
 
-### 2. 建立配置檔
+### 2. Create Configuration
 
-建立 `config.yaml`：
+Create `config.yaml`:
 
 ```yaml
 sources:
   - name: users
-    type: csv
+    type: file
     path: users.csv
+    format: csv
     schema:
       id: int
       name: str
@@ -82,169 +88,133 @@ transform: transform.MyTransform
 
 sinks:
   - name: output
-    type: csv
+    type: file
     path: output.csv
+    format: csv
 ```
 
-### 3. 執行
+### 3. Run
 
 ```bash
-# 在 WSL/Linux 環境中執行
-python -m pwetl.cli --config config.yaml
+# Basic execution
+pwetl --config config.yaml
 
-# 詳細模式
-python -m pwetl.cli --config config.yaml --verbose
+# Verbose mode
+pwetl --config config.yaml --verbose
 
-# 只驗證配置
-python -m pwetl.cli --config config.yaml --dry-run
+# Validate configuration only
+pwetl --config config.yaml --dry-run
 ```
 
-## 📖 文件
+## Documentation
 
-- [安裝指南](docs/installation.md)
-- [使用指南](docs/usage.md)
-- [環境變數配置](docs/environment-variables.md)
-- [多源多匯設計](docs/multi-source-sink.md)
+- [Installation Guide](docs/installation.md)
+- [Usage Guide](docs/usage.md)
+- [Environment Variables](docs/environment-variables.md)
+- [Multi-Source & Multi-Sink Design](docs/multi-source-sink.md)
+- [Changelog](docs/CHANGELOG.md)
 
-## 🎯 範例
+## Examples
 
-專案提供完整的範例展示各種使用場景：
+The project provides complete examples demonstrating various use cases:
 
-### 範例 1：基本 CSV 轉換
+### Example 1: YouBike API Data
 
-[examples/01_basic_csv/](examples/01_basic_csv/)
+[examples/01_api_source/](examples/01_api_source/)
 
-基礎的 CSV 檔案讀取、轉換、輸出流程。
+Fetch real-time station data from YouBike API, demonstrating:
 
-### 範例 2：水利署 API 資料
+- API Source usage (Static/Streaming modes)
+- Environment variable configuration (`.env` file)
+- Data validation (Pydantic + validation modes)
+- Automatic datetime type conversion
+- Multiple output formats (CSV, JSON, JSONL)
 
-[examples/02_wra_waterlevel/](examples/02_wra_waterlevel/)
+Each example includes complete configuration files, Transform logic, and usage instructions.
 
-從台灣水利署 API 讀取即時水位資料，示範：
+## Extension
 
-- API Source 使用
-- Static 和 Streaming 模式
-- 資料 Schema 定義
-- CSV 輸出
-
-### 範例 3：多源資料整合
-
-[examples/03_multi_source/](examples/03_multi_source/)
-
-整合多個資料源（API + File + Database），示範：
-
-- 多個資料源 (API、CSV、PostgreSQL)
-- 資料 JOIN 操作
-- 多個輸出目標 (CSV、API、Database)
-- 環境變數配置
-
-### 範例 4：資料夾監測與檔案過濾
-
-[examples/04_folder_monitor/](examples/04_folder_monitor/)
-
-監測資料夾並過濾特定檔案，示範：
-
-- 資料夾監測（批次/串流模式）
-- 正則表達式過濾檔名
-- Glob Pattern 過濾
-- 自動處理新檔案
-
-每個範例都包含完整的配置檔案、Transform 邏輯和使用說明。
-
-## 🔧 擴展
-
-### 自訂 Source
+### Custom Source
 
 ```python
 from pwetl.sources import BaseSource
 import pathway as pw
 
-class MongoDBSource(BaseSource):
-    required_config = ['uri', 'collection']
+class CustomSource(BaseSource):
+    required_config = ['param1']
+    optional_config = {'param2': 'default_value'}
 
-    def read(self):
-        # 實作讀取邏輯
+    def read(self) -> pw.Table:
+        # Implement read logic
         return table
-
-# 註冊
-from pwetl import SOURCE_REGISTRY
-SOURCE_REGISTRY['mongodb'] = MongoDBSource
 ```
 
-或在 YAML 中動態載入：
+Use in YAML:
 
 ```yaml
 sources:
   - name: data
     type: custom
     module: my_sources.py
-    class: MongoDBSource
-    uri: mongodb://localhost
-    collection: my_collection
+    class: CustomSource
+    param1: value1
 ```
 
-### 自訂 Sink
+### Custom Sink
 
 ```python
 from pwetl.sinks import BaseSink
+import pathway as pw
 
 class CustomSink(BaseSink):
-    def write(self, table):
-        # 實作寫入邏輯
+    required_config = ['param1']
+    
+    def write(self, table: pw.Table) -> None:
+        # Implement write logic
         pass
 ```
 
-## 🏗️ 專案結構
+Use in YAML:
 
-```
-pwetl/
-├── src/pwetl/
-│   ├── __init__.py
-│   ├── cli.py              # CLI 入口
-│   ├── core/
-│   │   ├── config.py       # 配置載入器
-│   │   ├── engine.py       # ETL 引擎
-│   │   ├── pipeline.py     # Pipeline 編排
-│   │   └── registry.py     # Source/Sink Registry
-│   ├── sources/
-│   │   ├── base.py         # BaseSource
-│   │   ├── file.py         # FileSource
-│   │   ├── api.py          # APISource
-│   │   └── database.py     # DatabaseSource
-│   ├── sinks/
-│   │   ├── base.py         # BaseSink
-│   │   ├── file.py         # FileSink
-│   │   ├── api.py          # APISink ⭐ 新增
-│   │   └── database.py     # DatabaseSink
-│   ├── transforms/
-│   │   └── base.py         # BaseTransform
-│   └── utils/
-│       ├── env.py          # 環境變數處理
-│       ├── loader.py       # 動態載入
-│       └── schema.py       # Schema 解析
-├── examples/               # 範例
-└── docs/                   # 文件
+```yaml
+sinks:
+  - name: output
+    type: custom
+    module: my_sinks.py
+    class: CustomSink
+    param1: value1
 ```
 
-## 🤝 貢獻
+For detailed extension guides, check the examples in [my-test/](my-test/).
 
-歡迎提交 Issue 和 Pull Request！
+## Project Structure
 
-## 📄 授權
+```
+src/pwetl/
+├── cli.py              # CLI entry point (pwetl command)
+├── core/
+│   ├── config.py       # Configuration loader
+│   ├── engine.py       # ETL engine
+│   ├── pipeline.py     # Pipeline orchestration
+│   └── registry.py     # Source/Sink Registry
+├── sources/
+│   ├── base.py         # BaseSource (with validation framework)
+│   ├── file.py         # FileSource (CSV/JSON/JSONL)
+│   ├── api.py          # APISource (REST API)
+│   └── database.py     # DatabaseSource (PostgreSQL/MySQL)
+├── sinks/
+│   ├── base.py         # BaseSink
+│   ├── file.py         # FileSink (CSV/JSON/JSONL)
+│   ├── api.py          # APISink (POST JSON)
+│   └── database.py     # DatabaseSink (PostgreSQL/MySQL)
+├── transforms/
+│   └── base.py         # BaseTransform
+└── utils/
+    ├── env.py          # Environment variable handling
+    ├── loader.py       # Dynamic loading
+    └── schema.py       # Schema parsing (Pathway + Pydantic)
+```
+
+## License
 
 MIT License
-
-## 💡 設計理念
-
-1. **簡單優先** - 常見場景要簡單直接
-2. **可擴展** - 但不過度設計
-3. **宣告式** - YAML 配置優於程式碼
-4. **型態安全** - 用 Schema 確保正確性
-
-## ⚙️ 技術棧
-
-- **Pathway**: 流式資料處理引擎
-- **PyYAML**: YAML 配置解析
-- **Requests**: HTTP 請求（API Source/Sink）
-- **psycopg2**: PostgreSQL 連接
-- **mysql-connector-python**: MySQL 連接

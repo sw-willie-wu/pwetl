@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 from pwetl.utils.loader import DynamicLoader, TransformLoader
 from pwetl.transforms import BaseTransform
+from pwetl.core.exceptions import LoaderError
 
 
 class TestDynamicLoader:
@@ -35,7 +36,7 @@ class TestDynamicLoader:
         """Test loading from nonexistent file raises error."""
         nonexistent = tmp_path / 'nonexistent.py'
 
-        with pytest.raises(ImportError, match="檔案不存在"):
+        with pytest.raises(LoaderError):
             DynamicLoader.load_class(str(nonexistent), 'SomeClass')
 
     def test_load_nonexistent_class_from_file(self, tmp_path):
@@ -43,17 +44,17 @@ class TestDynamicLoader:
         test_module = tmp_path / 'test_module.py'
         test_module.write_text('# Empty module\n', encoding='utf-8')
 
-        with pytest.raises(ImportError, match="找不到類別"):
+        with pytest.raises(LoaderError):
             DynamicLoader.load_class(str(test_module), 'NonexistentClass')
 
     def test_load_nonexistent_package(self):
         """Test loading from nonexistent package raises error."""
-        with pytest.raises(ImportError, match="找不到模組"):
+        with pytest.raises(LoaderError):
             DynamicLoader.load_class('nonexistent.package', 'SomeClass')
 
     def test_load_nonexistent_class_from_package(self):
         """Test loading nonexistent class from package raises error."""
-        with pytest.raises(ImportError, match="找不到類別"):
+        with pytest.raises(LoaderError):
             DynamicLoader.load_class('pwetl.sources', 'NonexistentSource')
 
 
@@ -82,7 +83,7 @@ class TestTransformLoader:
 
     def test_load_invalid_format(self):
         """Test loading with invalid format raises error."""
-        with pytest.raises(ValueError, match="Transform 配置格式錯誤"):
+        with pytest.raises(LoaderError):
             TransformLoader.load('InvalidFormat')
 
     def test_load_non_transform_class(self, tmp_path):
@@ -97,10 +98,10 @@ class TestTransformLoader:
 
         transform_config = f'{module}.NotATransform'
 
-        with pytest.raises(TypeError, match="必須繼承自 BaseTransform"):
+        with pytest.raises(TypeError, match="must inherit from BaseTransform"):
             TransformLoader.load(transform_config)
 
     def test_load_nonexistent_transform(self):
         """Test loading nonexistent transform raises error."""
-        with pytest.raises(ImportError):
+        with pytest.raises(LoaderError):
             TransformLoader.load('nonexistent.module.Transform')

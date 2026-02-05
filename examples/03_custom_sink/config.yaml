@@ -1,0 +1,25 @@
+sources:
+  - name: products
+    type: file
+    path: input.csv
+    format: csv
+    schema:
+      product_id: int
+      name: str
+      value: int
+      category: str
+
+transform: transform.SummaryTransform
+
+sinks:
+  - name: markdown_report
+    type: custom
+    module: custom_sink.MarkdownReportSink
+    path: output/report.md
+    title: Product Sales Report
+    include_summary: true
+    
+  - name: jsonl_output
+    type: custom
+    module: custom_sink.JSONLSink
+    path: output/products.jsonl

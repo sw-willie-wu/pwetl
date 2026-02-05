@@ -1,21 +1,27 @@
-"""ETL Engine。"""
+"""ETL Engine."""
+
 import sys
 from pathlib import Path
 from typing import Union
+
 from pwetl.core.config import ConfigLoader
-from pwetl.core.registry import SourceFactory, SinkFactory
 from pwetl.core.pipeline import Pipeline
-from pwetl.utils.loader import TransformLoader
+from pwetl.core.registry import SinkFactory, SourceFactory
 from pwetl.utils.env import load_env_file
+from pwetl.utils.loader import TransformLoader
+from pwetl.utils.logger import get_logger
+
+
+LOGGER = get_logger()
 
 
 class ETLEngine:
-    """ETL Engine。
+    """ETL Engine.
 
-    負責：
-    1. 載入配置
-    2. 建立 Pipeline
-    3. 執行 ETL 流程
+    Responsibilities:
+    1. Load configuration
+    2. Build pipeline
+    3. Execute ETL workflow
     """
 
     def __init__(
@@ -24,145 +30,145 @@ class ETLEngine:
         env_file: Union[str, Path, None] = None,
         verbose: bool = False,
     ):
-        """初始化 ETL Engine。
+        """Initialize ETL Engine.
 
         Args:
-            config_path: 配置檔案路徑
-            env_file: .env 檔案路徑，如果為 None 則自動尋找
-            verbose: 是否顯示詳細輸出
+            config_path: Path to configuration file
+            env_file: Path to .env file, if None will auto-discover
+            verbose: Whether to show detailed output
         """
         self.config_path = Path(config_path).resolve()
         self.env_file = env_file
         self.verbose = verbose
-        self.config = None
-        self.pipeline = None
+        self.config: dict | None = None
+        self.pipeline: Pipeline | None = None
 
-        # 將配置檔案所在目錄加入 Python 路徑，以便載入相對模組
+        # Add configuration directory to Python path to allow loading relative modules
         config_dir = str(self.config_path.parent)
         if config_dir not in sys.path:
             sys.path.insert(0, config_dir)
 
     def execute(self) -> None:
-        """執行 ETL 流程。
+        """Execute ETL workflow.
 
         Raises:
-            Exception: 當執行失敗時
+            Exception: When execution fails
         """
         try:
-            # 載入環境變數
-            if self.verbose:
-                print("🔐 載入環境變數...")
+            LOGGER.debug("Start ETL Engine execution...")
+            LOGGER.debug("Loading environment variables...")
             self._load_env()
 
-            # 載入配置
-            if self.verbose:
-                print("📋 載入配置...")
+            # Load configuration
+            LOGGER.debug("Loading yaml configuration...")
             self._load_config()
 
-            # 建立 Pipeline
-            if self.verbose:
-                print("🏗️  建立 Pipeline...")
+            # Build Pipeline
+            LOGGER.debug("Initializing Pipeline structure...")
             self._build_pipeline()
 
-            # 執行 Pipeline
+            # Execute Pipeline
+            if self.pipeline is None:
+                raise RuntimeError("Pipeline not initialized, cannot execute.")
             self.pipeline.run()
 
         except Exception as e:
-            print(f"\n❌ 執行失敗: {e}")
+            LOGGER.error("Execution failed: %s", e)
             if self.verbose:
                 import traceback
-                print("\n詳細錯誤訊息:")
+
+                LOGGER.error("\nTraceback:")
                 traceback.print_exc()
             raise
 
     def dry_run(self) -> None:
-        """乾跑模式：只驗證配置，不執行。
+        """Dry-run mode: validate configuration only, do not execute.
 
         Raises:
-            Exception: 當驗證失敗時
+            Exception: When validation fails
         """
         try:
-            print("🔍 驗證模式...")
+            print("Validation mode...")
 
-            # 載入環境變數
-            print("  ✓ 載入環境變數")
+            # Load environment variables
+            print("  ✓ Load environment variables")
             self._load_env()
 
-            # 載入配置
-            print("  ✓ 載入配置")
+            # Load configuration
+            print("  ✓ Load configuration")
             self._load_config()
 
-            # 建立 Pipeline（驗證所有組件都能正確建立）
-            print("  ✓ 驗證 Pipeline 配置")
+            # Build Pipeline (validates all components can be correctly created)
+            print("  ✓ Validate Pipeline configuration")
             self._build_pipeline()
 
-            print("\n✅ 配置驗證通過")
+            print("\nConfiguration validation passed")
 
         except Exception as e:
-            print(f"\n❌ 驗證失敗: {e}")
+            print(f"\nValidation failed: {e}")
             if self.verbose:
                 import traceback
-                print("\n詳細錯誤訊息:")
+
+                print("\nDetailed error information:")
                 traceback.print_exc()
             raise
 
     def _load_env(self) -> None:
-        """載入環境變數。"""
+        """Load environment variables."""
         if self.env_file:
             load_env_file(self.env_file)
         else:
-            # 自動尋找 .env 檔案
-            load_env_file('.env')
+            # Auto-discover .env file
+            load_env_file(".env")
 
     def _load_config(self) -> None:
-        """載入配置。
+        """Load configuration.
 
         Raises:
-            Exception: 當配置載入失敗時
+            Exception: When configuration loading fails
         """
         try:
             self.config = ConfigLoader.load(self.config_path)
         except Exception as e:
-            raise RuntimeError(f"配置載入失敗: {e}") from e
+            raise RuntimeError(f"Configuration loading failed: {e}") from e
 
     def _build_pipeline(self) -> None:
-        """建立 Pipeline。
+        """Build Pipeline.
 
         Raises:
-            RuntimeError: 當 Pipeline 建立失敗時
+            RuntimeError: When Pipeline building fails
         """
         try:
-            # 建立 Sources
+            if self.config is None:
+                raise RuntimeError("Configuration not loaded, cannot build Pipeline.")
+
+            # Build Sources
             sources = {}
-            for source_config in self.config['sources']:
-                name = source_config['name']
+            for source_config in self.config["sources"]:
+                name = source_config["name"]
                 sources[name] = SourceFactory.create(name, source_config)
+            LOGGER.debug(
+                "  Find %d Sources: %s", len(sources), ", ".join(sources.keys())
+            )
+            # Load Transform
+            transform = TransformLoader.load(self.config["transform"])
+            LOGGER.debug("  Find Transform module: %s", self.config["transform"])
 
-            if self.verbose:
-                print(f"  - 建立了 {len(sources)} 個 Source: {', '.join(sources.keys())}")
-
-            # 載入 Transform
-            transform = TransformLoader.load(self.config['transform'])
-
-            if self.verbose:
-                print(f"  - 載入 Transform: {self.config['transform']}")
-
-            # 建立 Sinks
+            # Build Sinks
             sinks = {}
-            for sink_config in self.config['sinks']:
-                name = sink_config['name']
+            for sink_config in self.config["sinks"]:
+                name = sink_config["name"]
                 sinks[name] = SinkFactory.create(name, sink_config)
+            LOGGER.debug("  Find %d Sinks: %s", len(sinks), ", ".join(sinks.keys()))
 
-            if self.verbose:
-                print(f"  - 建立了 {len(sinks)} 個 Sink: {', '.join(sinks.keys())}")
-
-            # 建立 Pipeline
+            # Create Pipeline
             self.pipeline = Pipeline(
                 sources=sources,
                 transform=transform,
                 sinks=sinks,
                 verbose=self.verbose,
             )
+            # LOGGER.debug("Start build Pipeline flow...")
 
         except Exception as e:
-            raise RuntimeError(f"Pipeline 建立失敗: {e}") from e
+            raise RuntimeError(f"Build Pipeline failed: {e}") from e

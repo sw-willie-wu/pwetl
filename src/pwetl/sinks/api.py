@@ -1,4 +1,5 @@
 """API data sink."""
+
 import time
 from typing import Any, Dict, List
 import requests
@@ -7,177 +8,209 @@ from pwetl.sinks.base import BaseSink
 
 
 class APISink(BaseSink):
-    """API 輸出。
+    """API output.
 
-    將資料 POST 到 API endpoint。
-    支援：
-    - POST JSON 數據
-    - 自訂 Headers
-    - 錯誤重試
+    POST data to API endpoint.
+    Supports:
+    - POST JSON data
+    - Custom headers
+    - Error retry
     """
 
-    required_config = ['url']
+    required_config = ["url"]
     optional_config = {
-        'method': 'POST',          # HTTP 方法
-        'headers': {},             # 自訂 Headers
-        'timeout': 30,             # 超時時間（秒）
-        'max_retry': 3,            # 最大重試次數
-        'retry_delay': 1,          # 重試延遲（秒）
-        'batch_size': 1,           # 批次大小（0 表示一次全部發送）
+        "method": "POST",  # HTTP method
+        "headers": {},  # Custom headers
+        "timeout": 30,  # Timeout in seconds
+        "max_retry": 3,  # Maximum retry count
+        "retry_delay": 1,  # Retry delay in seconds
+        "batch_size": 1,  # Batch size (0 means send all at once)
+        "format": "json",  # Data format: 'json' or 'form'
     }
 
+    def __init__(self, name: str, config: Dict[str, Any]):
+        """Initialize APISink."""
+        super().__init__(name, config)
+        self._temp_path = None
+
     def write(self, table: pw.Table) -> None:
-        """將資料 POST 到 API。
+        """POST data to API.
 
         Args:
-            table: 要寫入的 Pathway Table
+            table: Pathway Table to write
 
         Raises:
-            requests.RequestException: 當 API 請求失敗時
+            requests.RequestException: When API request fails
         """
-        # Pathway 是流式處理，我們需要將資料輸出到暫存位置
-        # 然後讀取並發送到 API
+        # Pathway is streaming, we need to output data to a temporary location
+        # then read and send to API
 
         import tempfile
-        import json
         import os
 
-        # 建立暫存檔案
-        fd, temp_path = tempfile.mkstemp(suffix='.jsonl', text=True)
+        # Create temporary file
+        fd, temp_path = tempfile.mkstemp(suffix=".jsonl", text=True)
         os.close(fd)
 
         try:
-            # 先寫入暫存檔案
+            # Write to temporary file first
             pw.io.jsonlines.write(table, temp_path)
 
-            # 執行 Pathway 以確保資料寫入
-            # 注意：這會在 Pipeline.run() 中執行
+            # Execute Pathway to ensure data is written
+            # Note: This runs in Pipeline.run()
 
-            # 讀取暫存檔案並發送到 API
-            # 這部分在 teardown 中執行
+            # Read temporary file and send to API
+            # This part runs in teardown
             self._temp_path = temp_path
 
-        except Exception as e:
-            # 清理暫存檔案
+        except Exception:
+            # Clean up temporary file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
             raise
 
     def teardown(self) -> None:
-        """清理資源並發送資料到 API。"""
+        """Clean up resources and send data to API."""
         import json
         import os
+        import logging
 
-        if not hasattr(self, '_temp_path'):
+        logger = logging.getLogger(__name__)
+
+        if not hasattr(self, "_temp_path") or self._temp_path is None:
+            logger.warning("APISink %s: No temp_path attribute", self.name)
             return
 
-        temp_path = self._temp_path
+        temp_path: str = self._temp_path
+        logger.info(
+            "APISink %s: Starting teardown with temp file %s",
+            self.name, temp_path
+        )
 
         try:
-            # 檢查暫存檔案是否存在
+            # Check if temporary file exists
             if not os.path.exists(temp_path):
+                logger.warning("APISink %s: Temp file does not exist", self.name)
                 return
 
-            # 讀取資料
+            # Read data
             data = []
-            with open(temp_path, 'r', encoding='utf-8') as f:
+            with open(temp_path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line:
                         data.append(json.loads(line))
 
-            # 發送到 API
-            if data:
-                self._send_to_api(data)
-
-        finally:
-            # 清理暫存檔案
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-
-    def _send_to_api(self, data: List[Dict[str, Any]]) -> None:
-        """發送資料到 API。
-
-        Args:
-            data: 要發送的資料列表
-
-        Raises:
-            requests.RequestException: 當請求失敗且重試次數用盡時
-        """
-        url = self.config['url']
-        method = self.config['method'].upper()
-        headers = self.config['headers']
-        timeout = self.config['timeout']
-        max_retry = self.config['max_retry']
-        retry_delay = self.config['retry_delay']
-        batch_size = self.config['batch_size']
-
-        # 確保 Content-Type 是 JSON
-        if 'Content-Type' not in headers:
-            headers['Content-Type'] = 'application/json'
-
-        # 分批發送
-        if batch_size > 0:
-            batches = [
-                data[i:i + batch_size]
-                for i in range(0, len(data), batch_size)
-            ]
-        else:
-            batches = [data]  # 一次全部發送
-
-        # 發送每個批次
-        for i, batch in enumerate(batches):
-            self._send_batch(
-                batch, url, method, headers, timeout, max_retry, retry_delay
+            logger.info(
+                "APISink %s: Read %d records from temp file",
+                self.name, len(data)
             )
 
-    def _send_batch(
-        self,
-        batch: List[Dict[str, Any]],
-        url: str,
-        method: str,
-        headers: Dict[str, str],
-        timeout: int,
-        max_retry: int,
-        retry_delay: int,
-    ) -> None:
-        """發送單一批次到 API。
+            # Send to API
+            if data:
+                logger.info(
+                    "APISink %s: Sending data with format=%s",
+                    self.name, self.config.get('format', 'json')
+                )
+                self._send_to_api(data)
+            else:
+                logger.warning("APISink %s: No data to send", self.name)
+
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                logger.info("APISink %s: Cleaned up temp file", self.name)
+
+    def _send_to_api(self, data: List[Dict[str, Any]]) -> None:
+        """Send data to API.
 
         Args:
-            batch: 要發送的資料批次
-            url: API URL
-            method: HTTP 方法
-            headers: HTTP Headers
-            timeout: 超時時間
-            max_retry: 最大重試次數
-            retry_delay: 重試延遲
+            data: List of data to send
 
         Raises:
-            requests.RequestException: 當重試次數用盡後仍然失敗時
+            requests.RequestException: When request fails after retries are exhausted
         """
-        last_error = None
+        headers = self.config["headers"]
+        batch_size = self.config["batch_size"]
+        data_format = self.config.get("format", "json")
+
+        # Set default Content-Type based on format
+        if "Content-Type" not in headers:
+            if data_format == "form":
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
+            else:
+                headers["Content-Type"] = "application/json"
+
+        # Send in batches
+        if batch_size > 0:
+            batches = [
+                data[i : i + batch_size] for i in range(0, len(data), batch_size)
+            ]
+        else:
+            batches = [data]  # Send all at once
+
+        # Send each batch
+        for batch in batches:
+            self._send_batch(batch)
+
+    def _send_batch(self, batch: List[Dict[str, Any]]) -> None:
+        """Send a single batch to API.
+
+        Args:
+            batch: Data batch to send
+
+        Raises:
+            requests.RequestException: When request still fails after retries are exhausted
+        """
+        url = self.config["url"]
+        method = self.config["method"].upper()
+        headers = self.config["headers"]
+        timeout = self.config["timeout"]
+        max_retry = self.config["max_retry"]
+        retry_delay = self.config["retry_delay"]
+        data_format = self.config.get("format", "json")
 
         for attempt in range(max_retry + 1):
             try:
-                response = requests.request(
-                    method=method,
-                    url=url,
-                    json=batch,
-                    headers=headers,
-                    timeout=timeout,
-                )
+                # Choose data format
+                if data_format == "form":
+                    # For form data, send each item as separate form fields
+                    # If batch has multiple items, flatten to single form
+                    form_data = {}
+                    if len(batch) == 1:
+                        form_data = batch[0]
+                    else:
+                        # Multiple items: use indexed keys
+                        for idx, item in enumerate(batch):
+                            for key, value in item.items():
+                                form_data[f"{key}_{idx}"] = value
+
+                    response = requests.request(
+                        method=method,
+                        url=url,
+                        data=form_data,
+                        headers=headers,
+                        timeout=timeout,
+                    )
+                else:
+                    # JSON format (default)
+                    response = requests.request(
+                        method=method,
+                        url=url,
+                        json=batch,
+                        headers=headers,
+                        timeout=timeout,
+                    )
                 response.raise_for_status()
-                return  # 成功
+                return  # Success
 
             except requests.RequestException as e:
-                last_error = e
-
-                # 如果還有重試機會，等待後重試
+                # If retries remain, wait and retry
                 if attempt < max_retry:
                     time.sleep(retry_delay)
                     continue
-                else:
-                    # 重試次數用盡
-                    raise RuntimeError(
-                        f"API 請求失敗（已重試 {max_retry} 次）: {e}"
-                    ) from e
+                # Retries exhausted
+                raise RuntimeError(
+                    f"API request failed (retried {max_retry} times): {e}"
+                ) from e

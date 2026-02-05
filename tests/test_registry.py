@@ -3,6 +3,7 @@
 import pytest
 from pathlib import Path
 from pwetl.core.registry import SOURCE_REGISTRY, SINK_REGISTRY, SourceFactory, SinkFactory
+from pwetl.core.exceptions import RegistryError
 from pwetl.sources.base import BaseSource
 from pwetl.sinks.base import BaseSink
 
@@ -26,14 +27,14 @@ class TestSourceFactory:
         """Test creating source without type raises error."""
         config = {'name': 'test', 'path': 'test.csv'}
 
-        with pytest.raises(ValueError, match="配置缺少 'type' 欄位"):
+        with pytest.raises(RegistryError):
             SourceFactory.create('test', config)
 
     def test_create_unknown_type(self):
         """Test creating source with unknown type raises error."""
         config = {'name': 'test', 'type': 'unknown'}
 
-        with pytest.raises(ValueError, match="未知的 Source 類型"):
+        with pytest.raises(RegistryError):
             SourceFactory.create('test', config)
 
     def test_create_custom_source(self, tmp_path):
@@ -55,16 +56,21 @@ class TestSourceFactory:
             encoding='utf-8'
         )
 
-        config = {
-            'name': 'test',
-            'type': 'custom',
-            'module': str(custom_source),
-            'class': 'CustomSource'
-        }
+        # Add tmp_path to sys.path so module can be imported
+        import sys
+        sys.path.insert(0, str(tmp_path))
+        try:
+            config = {
+                'name': 'test',
+                'type': 'custom',
+                'module': 'custom_source.CustomSource'
+            }
 
-        source = SourceFactory.create('test', config)
-        assert source is not None
-        assert isinstance(source, BaseSource)
+            source = SourceFactory.create('test', config)
+            assert source is not None
+            assert isinstance(source, BaseSource)
+        finally:
+            sys.path.remove(str(tmp_path))
 
     def test_create_custom_source_missing_module(self):
         """Test creating custom source without module raises error."""
@@ -74,18 +80,18 @@ class TestSourceFactory:
             'class': 'CustomSource'
         }
 
-        with pytest.raises(ValueError, match="配置缺少 'module' 欄位"):
+        with pytest.raises(RegistryError):
             SourceFactory.create('test', config)
 
-    def test_create_custom_source_missing_class(self):
-        """Test creating custom source without class raises error."""
+    def test_create_custom_source_invalid_format(self):
+        """Test creating custom source with invalid module format raises error."""
         config = {
             'name': 'test',
             'type': 'custom',
-            'module': 'custom_source.py'
+            'module': 'custom_source'  # Missing .ClassName
         }
 
-        with pytest.raises(ValueError, match="配置缺少 'class' 欄位"):
+        with pytest.raises(RegistryError):
             SourceFactory.create('test', config)
 
     def test_create_custom_source_not_base_source(self, tmp_path):
@@ -98,15 +104,20 @@ class TestSourceFactory:
             encoding='utf-8'
         )
 
-        config = {
-            'name': 'test',
-            'type': 'custom',
-            'module': str(bad_source),
-            'class': 'NotASource'
-        }
+        # Add tmp_path to sys.path so module can be imported
+        import sys
+        sys.path.insert(0, str(tmp_path))
+        try:
+            config = {
+                'name': 'test',
+                'type': 'custom',
+                'module': 'bad_source.NotASource'
+            }
 
-        with pytest.raises(TypeError, match="必須繼承自 BaseSource"):
-            SourceFactory.create('test', config)
+            with pytest.raises(TypeError, match="must inherit from BaseSource"):
+                SourceFactory.create('test', config)
+        finally:
+            sys.path.remove(str(tmp_path))
 
 
 class TestSinkFactory:
@@ -128,14 +139,14 @@ class TestSinkFactory:
         """Test creating sink without type raises error."""
         config = {'name': 'test', 'path': 'output.csv'}
 
-        with pytest.raises(ValueError, match="配置缺少 'type' 欄位"):
+        with pytest.raises(RegistryError):
             SinkFactory.create('test', config)
 
     def test_create_unknown_type(self):
         """Test creating sink with unknown type raises error."""
         config = {'name': 'test', 'type': 'unknown'}
 
-        with pytest.raises(ValueError, match="未知的 Sink 類型"):
+        with pytest.raises(RegistryError):
             SinkFactory.create('test', config)
 
     def test_create_custom_sink(self, tmp_path):
@@ -155,16 +166,21 @@ class TestSinkFactory:
             encoding='utf-8'
         )
 
-        config = {
-            'name': 'test',
-            'type': 'custom',
-            'module': str(custom_sink),
-            'class': 'CustomSink'
-        }
+        # Add tmp_path to sys.path so module can be imported
+        import sys
+        sys.path.insert(0, str(tmp_path))
+        try:
+            config = {
+                'name': 'test',
+                'type': 'custom',
+                'module': 'custom_sink.CustomSink'
+            }
 
-        sink = SinkFactory.create('test', config)
-        assert sink is not None
-        assert isinstance(sink, BaseSink)
+            sink = SinkFactory.create('test', config)
+            assert sink is not None
+            assert isinstance(sink, BaseSink)
+        finally:
+            sys.path.remove(str(tmp_path))
 
     def test_create_custom_sink_missing_module(self):
         """Test creating custom sink without module raises error."""
@@ -174,18 +190,18 @@ class TestSinkFactory:
             'class': 'CustomSink'
         }
 
-        with pytest.raises(ValueError, match="配置缺少 'module' 欄位"):
+        with pytest.raises(RegistryError):
             SinkFactory.create('test', config)
 
-    def test_create_custom_sink_missing_class(self):
-        """Test creating custom sink without class raises error."""
+    def test_create_custom_sink_invalid_format(self):
+        """Test creating custom sink with invalid module format raises error."""
         config = {
             'name': 'test',
             'type': 'custom',
-            'module': 'custom_sink.py'
+            'module': 'custom_sink'  # Missing .ClassName
         }
 
-        with pytest.raises(ValueError, match="配置缺少 'class' 欄位"):
+        with pytest.raises(RegistryError):
             SinkFactory.create('test', config)
 
     def test_create_custom_sink_not_base_sink(self, tmp_path):
@@ -198,15 +214,20 @@ class TestSinkFactory:
             encoding='utf-8'
         )
 
-        config = {
-            'name': 'test',
-            'type': 'custom',
-            'module': str(bad_sink),
-            'class': 'NotASink'
-        }
+        # Add tmp_path to sys.path so module can be imported
+        import sys
+        sys.path.insert(0, str(tmp_path))
+        try:
+            config = {
+                'name': 'test',
+                'type': 'custom',
+                'module': 'bad_sink.NotASink'
+            }
 
-        with pytest.raises(TypeError, match="必須繼承自 BaseSink"):
-            SinkFactory.create('test', config)
+            with pytest.raises(TypeError, match="must inherit from BaseSink"):
+                SinkFactory.create('test', config)
+        finally:
+            sys.path.remove(str(tmp_path))
 
 
 class TestRegistry:

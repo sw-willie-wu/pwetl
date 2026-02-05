@@ -5,38 +5,35 @@ import pathway as pw
 
 
 class BaseTransform(ABC):
-    """所有 Transform 的抽象基類。
+    """Abstract base class for all Transforms.
 
-    所有自定義 Transform 都必須繼承此類別並實作 transform() 方法。
+    All custom Transforms must inherit this class and implement the transform() method.
     """
 
     @abstractmethod
     def transform(self, tables: Dict[str, pw.Table]) -> Dict[str, pw.Table]:
-        """轉換資料。
+        """Transform data.
 
         Args:
-            tables: 輸入的資料表，格式為 Dict[source_name, pw.Table]
+            tables: Input tables in format Dict[source_name, pw.Table]
 
         Returns:
-            Dict[sink_name, pw.Table]: 輸出的資料表
+            Dict[sink_name, pw.Table]: Output tables
 
         Raises:
-            Exception: 轉換失敗時拋出異常
+            Exception: When transformation fails
         """
-        pass
 
     def setup(self) -> None:
-        """初始化資源（可選）。
+        """Initialize resources (optional).
 
-        在 transform() 之前被呼叫，用於載入模型、建立連線等。
-        子類可以覆寫此方法。
+        Called before transform(), used to load models, establish connections, etc.
+        Subclasses can override this method.
         """
-        pass
 
     def teardown(self) -> None:
-        """清理資源（可選）。
+        """Clean up resources (optional).
 
-        在 transform() 之後被呼叫，用於釋放資源、關閉連線等。
-        子類可以覆寫此方法。
+        Called after transform(), used to release resources, close connections, etc.
+        Subclasses can override this method.
         """
-        pass

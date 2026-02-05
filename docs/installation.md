@@ -7,77 +7,47 @@
 
 ## 安裝方法
 
-### 方法 1：開發模式安裝（推薦用於開發）
-
-使用 uv（推薦）：
+### 使用 uv（推薦）
 
 ```bash
 # 在 WSL 或 Linux 環境中
 uv sync
-
-# 驗證安裝
-python test_install.py
 ```
 
-使用 pip：
+### 使用 pip
 
 ```bash
-# 在 WSL 或 Linux 環境中
+# 開發模式安裝
 pip install -e .
 
-# 驗證安裝
-python test_install.py
-```
-
-### 方法 2：正式安裝
-
-```bash
+# 或正式安裝
 pip install .
-```
-
-### 方法 3：從原始碼建置
-
-```bash
-# 建置 wheel 套件
-python -m build
-
-# 安裝建置的套件
-pip install dist/pwetl-0.1.0-py3-none-any.whl
 ```
 
 ## 驗證安裝
 
-執行測試腳本驗證安裝是否成功：
-
-```bash
-python test_install.py
-```
-
-如果所有測試都通過，你應該會看到：
-
-```
-✓ All tests passed! pwetl is correctly installed.
-```
-
-你也可以在 Python 中測試：
+在 Python 中測試：
 
 ```python
 import pwetl
 print(pwetl.__version__)  # 應該輸出: 0.1.0
 
 from pwetl import ETLEngine
-engine = ETLEngine("examples/config.yaml")
 # 如果沒有錯誤，說明安裝成功
+```
+
+或執行測試：
+
+```bash
+pytest tests/
 ```
 
 ## 執行範例
 
 ```bash
-# 執行基本範例
-python -c "from pwetl import ETLEngine; ETLEngine('examples/config.yaml').execute()"
-
-# 執行多源多目標範例
-python examples/run_multi_examples.py
+# 執行 YouBike API 範例
+cd examples/01_api_source
+pwetl --config config_static.yaml
 ```
 
 ## 常見問題
@@ -98,84 +68,65 @@ wsl --install
 ```bash
 cd /mnt/c/Users/your_username/path/to/pwetl
 uv sync
+```
+
+### Q: Python 版本不符
+
+A: pwetl 需要 Python 3.12 或更高版本。請使用以下指令檢查版本：
+
+```bash
+python --version
+```
+
+如需安裝 Python 3.12+：
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install python3.12
+
+# 或使用 pyenv
+pyenv install 3.12.0
+pyenv local 3.12.0
+```
+
+### Q: 安裝 Pathway 時出現錯誤
+
+A: 確保你在 Linux 或 WSL 環境中，並且系統已更新：
+
+```bash
+sudo apt update
+sudo apt upgrade
+```
+
+### Q: 如何使用虛擬環境？
+
+A: 使用 uv 會自動管理虛擬環境。如果使用 pip：
+
+```bash
+# 創建虛擬環境
+python -m venv .venv
+
+# 啟用虛擬環境
+source .venv/bin/activate  # Linux/Mac/WSL
 # 或
+.venv\Scripts\activate  # Windows (不建議，Pathway 不支援)
+
+# 安裝
 pip install -e .
 ```
 
-### Q: import pwetl 失敗
+## 開發環境設定
 
-A: 確保你已經安裝了套件（使用 `pip install -e .` 或 `uv sync`），並且在正確的虛擬環境中執行。
-
-### Q: 找不到模組
-
-A: 如果使用開發模式安裝（`pip install -e .`），確保你在專案根目錄中執行命令。
-
-## 可選功能安裝
-
-根據你的需求，可以安裝額外的功能支援：
-
-### PostgreSQL 支援
+如果你要開發 pwetl：
 
 ```bash
-# 使用 uv
-uv sync --extra postgres
+# 安裝開發依賴
+uv sync
 
-# 使用 pip
-pip install -e ".[postgres]"
-```
+# 執行測試
+pytest tests/
 
-### MySQL 支援
-
-```bash
-# 使用 uv
-uv sync --extra mysql
-
-# 使用 pip
-pip install -e ".[mysql]"
-```
-
-### 安裝所有資料庫支援
-
-```bash
-# 使用 uv
-uv sync --extra database
-
-# 使用 pip
-pip install -e ".[database]"
-```
-
-### 安裝所有功能（包含開發工具）
-
-```bash
-# 使用 uv
-uv sync --extra all
-
-# 使用 pip
-pip install -e ".[all]"
-```
-
-## 開發設定
-
-如果你想為 pwetl 貢獻程式碼：
-
-```bash
-# 安裝開發相依套件
-uv sync --extra dev
-# 或
-pip install -e ".[dev]"
-
-# 執行測試（將來）
-pytest
-
-# 程式碼格式化
-black src/
-
-# 程式碼檢查
-ruff check src/
-```
-
-## 解除安裝
-
-```bash
-pip uninstall pwetl
+# 執行測試並檢查覆蓋率
+pytest --cov=src/pwetl tests/
 ```

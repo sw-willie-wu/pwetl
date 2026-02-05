@@ -36,6 +36,7 @@ ENV/
 .coverage
 htmlcov/
 .tox/
+output/
 
 # Output files
 examples/data/output.*
@@ -67,3 +68,4 @@ uv.lock
 claude.md
 discussions/
 
+my-test/
