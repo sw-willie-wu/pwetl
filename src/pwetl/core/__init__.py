@@ -5,10 +5,30 @@ from pwetl.core.registry import (
     SourceFactory,
     SinkFactory,
 )
+from pwetl.core.exceptions import (
+    PWETLError,
+    ConfigurationError,
+    ValidationError,
+    SchemaError,
+    SourceError,
+    SinkError,
+    TransformError,
+    RegistryError,
+    LoaderError,
+)
 
 __all__ = [
     'SOURCE_REGISTRY',
     'SINK_REGISTRY',
     'SourceFactory',
     'SinkFactory',
+    'PWETLError',
+    'ConfigurationError',
+    'ValidationError',
+    'SchemaError',
+    'SourceError',
+    'SinkError',
+    'TransformError',
+    'RegistryError',
+    'LoaderError',
 ]

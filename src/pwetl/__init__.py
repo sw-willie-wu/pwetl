@@ -5,7 +5,7 @@ Just write transforms and config YAML to build your ETL service.
 
 __version__ = '0.1.0'
 
-# 核心類別
+# Core classes
 from pwetl.core.engine import ETLEngine
 from pwetl.core.pipeline import Pipeline
 from pwetl.core.config import ConfigLoader
@@ -16,27 +16,40 @@ from pwetl.core.registry import (
     SinkFactory,
 )
 
-# Base 類別
+# Base classes
 from pwetl.sources.base import BaseSource
 from pwetl.sinks.base import BaseSink
 from pwetl.transforms.base import BaseTransform
 
-# 內建 Sources
+# Built-in Sources
 from pwetl.sources.file import FileSource
 from pwetl.sources.api import APISource
 from pwetl.sources.database import DatabaseSource
 
-# 內建 Sinks
+# Built-in Sinks
 from pwetl.sinks.file import FileSink
 from pwetl.sinks.database import DatabaseSink
 from pwetl.sinks.api import APISink
 
-# 工具
+# Utilities
 from pwetl.utils.env import EnvVarSubstitution, load_env_file
 from pwetl.utils.loader import DynamicLoader, TransformLoader
 from pwetl.utils.schema import SchemaParser
 
-# 註冊內建 Sources 和 Sinks（避免循環引用）
+# Exceptions
+from pwetl.core.exceptions import (
+    PWETLError,
+    ConfigurationError,
+    ValidationError,
+    SchemaError,
+    SourceError,
+    SinkError,
+    TransformError,
+    RegistryError,
+    LoaderError,
+)
+
+# Register built-in Sources and Sinks (avoid circular imports)
 from pwetl.sources import _register_sources
 from pwetl.sinks import _register_sinks
 
@@ -44,10 +57,10 @@ _register_sources()
 _register_sinks()
 
 __all__ = [
-    # 版本
+    # Version
     '__version__',
 
-    # 核心
+    # Core
     'ETLEngine',
     'Pipeline',
     'ConfigLoader',
@@ -56,25 +69,36 @@ __all__ = [
     'SourceFactory',
     'SinkFactory',
 
-    # Base 類別
+    # Base classes
     'BaseSource',
     'BaseSink',
     'BaseTransform',
 
-    # 內建 Sources
+    # Built-in Sources
     'FileSource',
     'APISource',
     'DatabaseSource',
 
-    # 內建 Sinks
+    # Built-in Sinks
     'FileSink',
     'DatabaseSink',
     'APISink',
 
-    # 工具
+    # Utilities
     'EnvVarSubstitution',
     'load_env_file',
     'DynamicLoader',
     'TransformLoader',
     'SchemaParser',
+
+    # Exceptions
+    'PWETLError',
+    'ConfigurationError',
+    'ValidationError',
+    'SchemaError',
+    'SourceError',
+    'SinkError',
+    'TransformError',
+    'RegistryError',
+    'LoaderError',
 ]
