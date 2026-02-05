@@ -1,4 +1,5 @@
 """File-based data sources."""
+
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
@@ -9,63 +10,71 @@ from pwetl.utils.schema import SchemaParser
 
 
 class FileSource(BaseSource):
-    """檔案資料源。
+    """File data source.
 
-    支援的格式：CSV, JSON, JSONL, Parquet
+    Supported formats: CSV, JSON, JSONL
 
-    可以指定單一檔案或監測資料夾：
-    - 單一檔案：path 指向檔案
-    - 資料夾監測：path 指向資料夾，使用 regex 或 filename_pattern 過濾
+    Can specify single file or monitor directory:
+    - Single file: path points to file
+    - Directory monitoring: path points to directory, use regex or filename_pattern to filter
     """
 
-    required_config = ['path']
+    required_config = ["path"]
     optional_config = {
-        'format': 'csv',            # 預設為 CSV
-        'schema': None,             # 可選的 Schema
-        'mode': 'static',           # 'static' 或 'streaming'
-        'regex': None,              # 正則表達式過濾檔名（資料夾模式）
-        'filename_pattern': None,   # 檔名匹配模式（glob pattern，資料夾模式）
+        "format": "csv",  # Default to CSV
+        "schema": None,  # Optional schema
+        "mode": "static",  # 'static' or 'streaming'
+        "regex": None,  # Regex to filter filenames (directory mode)
+        "filename_pattern": None,  # Filename matching pattern (glob pattern, directory mode)
     }
 
-    # 支援的檔案格式
-    SUPPORTED_FORMATS = ['csv', 'json', 'jsonl', 'parquet']
+    # Supported file formats
+    SUPPORTED_FORMATS = ["csv", "json", "jsonl"]
 
     def read(self) -> pw.Table:
-        """讀取檔案資料。
+        """Read file data.
 
         Returns:
-            pw.Table: 包含資料的 Pathway Table
+            pw.Table: Pathway Table containing the data
 
         Raises:
-            ValueError: 當檔案格式不支援時
-            FileNotFoundError: 當檔案或資料夾不存在時
+            ValueError: When file format is not supported
+            FileNotFoundError: When file or directory does not exist
         """
-        path = self.config['path']
-        file_format = self.config['format']
+        path = self.config["path"]
+        file_format = self.config["format"]
 
-        # 檢查路徑是否存在
+        # Check if path exists
         path_obj = Path(path)
         if not path_obj.exists():
-            raise FileNotFoundError(f"路徑不存在: {path}")
+            raise FileNotFoundError(f"Path does not exist: {path}")
 
-        # 檢查格式是否支援
+        # Check if format is supported
         if file_format not in self.SUPPORTED_FORMATS:
             raise ValueError(
-                f"不支援的檔案格式: '{file_format}'\n"
-                f"支援的格式: {', '.join(self.SUPPORTED_FORMATS)}"
+                f"Unsupported file format: '{file_format}'\n"
+                f"Supported formats: {', '.join(self.SUPPORTED_FORMATS)}"
             )
 
-        # 解析 Schema
+        # Parse Schema
         schema = self._get_schema()
-        
-        # 檢查是否使用 strict 驗證模式
-        validation_mode = self._get_validation_mode()
-        
-        # strict 模式：先讀取資料、驗證、轉換，再建立 Table
-        if validation_mode == 'strict' and schema:
-            return self._read_with_strict_validation(path, file_format, schema)
 
-        # 判斷是資料夾還是檔案
+        # Check if strict validation mode is used
+        validation_mode = self._get_validation_mode()
+
+        # Validation modes that require schema
+        if validation_mode in ("sample", "strict") and not schema:
+            raise ValueError(
+                f"Schema configuration is required when validation_mode='{validation_mode}'. "
+                f"Validation modes 'sample' and 'strict' use Pydantic to validate data. "
+                f"Please add 'schema' section in your config or set validation_mode='none'."
+            )
+
+        # strict mode: read data, validate, transform, then create Table
+        if validation_mode == "strict":
+            return self._read_with_strict_validation(path, file_format)
+
+        # Determine if it's a directory or a file
         if path_obj.is_dir():
             return self._read_directory(path, file_format, schema)
         return self._read_single_file(path, file_format, schema)
@@ -73,185 +82,181 @@ class FileSource(BaseSource):
     def _read_single_file(
         self, path: str, file_format: str, schema: Optional[Type[pw.Schema]]
     ) -> pw.Table:
-        """讀取單一檔案。"""
-        # 根據格式讀取檔案
-        if file_format == 'csv':
+        """Read a single file."""
+        # Read file based on format
+        if file_format == "csv":
             return self._read_csv(path, schema)
-        if file_format == 'json':
+        if file_format == "json":
             return self._read_json(path, schema)
-        if file_format == 'jsonl':
+        if file_format == "jsonl":
             return self._read_jsonl(path, schema)
-        if file_format == 'parquet':
-            return self._read_parquet(path, schema)
-        return None
+        raise ValueError(f"Unsupported file format: {file_format}")
 
     def _read_directory(
         self, path: str, file_format: str, schema: Optional[Type[pw.Schema]]
     ) -> pw.Table:
-        """讀取資料夾內的檔案。
+        """Read files in a directory.
 
-        使用 regex 或 filename_pattern 來過濾檔案。
+        Use regex or filename_pattern to filter files.
         """
-        regex_pattern = self.config.get('regex')
-        filename_pattern = self.config.get('filename_pattern')
+        regex_pattern = self.config.get("regex")
+        filename_pattern = self.config.get("filename_pattern")
 
-        # 根據格式建立最終的讀取路徑
+        # Build final read path based on format
         if regex_pattern:
-            # 使用正則表達式過濾
-            final_path = self._get_regex_filtered_path(
-                path, file_format, regex_pattern
-            )
+            # Use regex filtering
+            final_path = self._get_regex_filtered_path(path, file_format, regex_pattern)
         elif filename_pattern:
-            # 使用檔名匹配模式（glob pattern）
+            # Use filename matching pattern (glob pattern)
             final_path = str(Path(path) / filename_pattern)
         else:
-            # 預設讀取所有符合格式的檔案
+            # Default: read all files matching the format
             final_path = str(Path(path) / f"*.{file_format}")
 
-        # 根據格式讀取檔案
-        if file_format == 'csv':
+        # Read file based on format
+        if file_format == "csv":
             return self._read_csv(final_path, schema)
-        if file_format == 'json':
+        if file_format == "json":
             return self._read_json(final_path, schema)
-        if file_format == 'jsonl':
+        if file_format == "jsonl":
             return self._read_jsonl(final_path, schema)
-        if file_format == 'parquet':
-            return self._read_parquet(final_path, schema)
-        return None
+        raise ValueError(f"Unsupported file format: {file_format}")
 
-    def _get_regex_filtered_path(self, directory: str, file_format: str, pattern: str) -> str:
-        """使用正則表達式過濾檔案，轉換為 glob pattern。
+    def _get_regex_filtered_path(
+        self, directory: str, file_format: str, pattern: str
+    ) -> str:
+        """Filter files using regular expression, convert to glob pattern.
 
-        注意：Pathway 不直接支援 regex，所以這裡我們需要找出符合的檔案
-        並轉換為可用的路徑格式。在 streaming 模式下，這個方法的效果有限。
+        Note: Pathway doesn't directly support regex, so we need to find matching files
+        and convert to usable path format. This method has limited effectiveness in streaming mode.
 
         Args:
-            directory: 資料夾路徑
-            file_format: 檔案格式
-            pattern: 正則表達式 pattern
+            directory: Directory path
+            file_format: File format
+            pattern: Regular expression pattern
 
         Returns:
-            符合條件的檔案路徑 pattern
+            File path pattern matching the criteria
         """
         regex = re.compile(pattern)
         dir_path = Path(directory)
 
-        # 在 static 模式下，可以直接過濾檔案
-        mode = self.config.get('mode', 'static')
-        if mode == 'static':
-            # 找出所有符合 regex 的檔案
+        # In static mode, files can be filtered directly
+        mode = self.config.get("mode", "static")
+        if mode == "static":
+            # Find all files matching the regex
             matching_files = [
-                str(f) for f in dir_path.glob(f"*.{file_format}")
+                str(f)
+                for f in dir_path.glob(f"*.{file_format}")
                 if regex.search(f.name)
             ]
 
             if not matching_files:
                 raise ValueError(
-                    f"在 {directory} 中找不到符合 pattern '{pattern}' 的 {file_format} 檔案"
+                    f"Cannot find {file_format} files matching pattern '{pattern}' in {directory}"
                 )
 
-            # 如果只有一個檔案，直接返回
+            # If there's only one file, return it directly
             if len(matching_files) == 1:
                 return matching_files[0]
 
-            # 多個檔案：使用 glob pattern（限制較多）
-            # 嘗試從 regex 轉換為 glob pattern（簡單情況）
+            # Multiple files: use glob pattern (more limited)
+            # Try to convert regex to glob pattern (simple cases)
             return self._convert_regex_to_glob(directory, file_format, pattern)
-        # streaming 模式：轉換為 glob（限制較多）
+        # streaming mode: convert to glob (more limited)
         return self._convert_regex_to_glob(directory, file_format, pattern)
 
-    def _convert_regex_to_glob(self, directory: str, file_format: str, pattern: str) -> str:
-        """嘗試將簡單的正則表達式轉換為 glob pattern。
+    def _convert_regex_to_glob(
+        self, directory: str, file_format: str, pattern: str
+    ) -> str:
+        """Try to convert simple regular expressions to glob pattern.
 
-        這只支援簡單的 regex pattern。對於複雜的 pattern，建議使用 filename_pattern。
+        This only supports simple regex patterns.
+        For complex patterns, use filename_pattern instead.
         """
-        # 簡單轉換規則
-        glob = pattern.replace('.*', '*').replace('.+', '*').replace('\\d', '[0-9]')
+        # Simple conversion rules
+        glob = pattern.replace(".*", "*").replace(".+", "*").replace("\\d", "[0-9]")
 
-        # 如果 pattern 不包含副檔名，加上
-        if not glob.endswith(f'.{file_format}'):
+        # If pattern doesn't include file extension, add it
+        if not glob.endswith(f".{file_format}"):
             glob = f"{glob}*.{file_format}"
 
         return str(Path(directory) / glob)
 
     def _get_schema(self) -> Optional[Type[pw.Schema]]:
-        """取得 Schema。
+        """Get Schema.
 
         Returns:
-            Pathway Schema 類別，如果沒有指定則回傳 None
+            Pathway Schema class, returns None if not specified
         """
-        schema_config = self.config.get('schema')
+        schema_config = self.config.get("schema")
         if schema_config:
             return SchemaParser.parse(schema_config)
         return None
-    
+
     def _read_with_strict_validation(
-        self, path: str, file_format: str, schema: Type[pw.Schema]
+        self, path: str, file_format: str
     ) -> pw.Table:
-        """使用 strict 模式讀取：先載入資料、驗證、轉換，再建立 Table。
-        
+        """Read with strict mode: load data, validate, transform, then create Table.
+
         Args:
-            path: 檔案或資料夾路徑
-            file_format: 檔案格式
-            schema: Pathway Schema
-            
+            path: File or directory path
+            file_format: File format
+
         Returns:
-            驗證並標準化後的 Pathway Table
+            Validated and normalized Pathway Table
         """
-        import json
-        
-        # 讀取原始資料
+        # Load raw data
         path_obj = Path(path)
-        schema_config = self.config.get('schema', {})
-        
+
         if path_obj.is_dir():
-            # 讀取資料夾中的所有檔案
+            # Read all files in the directory
             raw_data = []
             pattern = f"*.{file_format}"
             for file_path in path_obj.glob(pattern):
                 raw_data.extend(self._load_file_data(str(file_path), file_format))
         else:
             raw_data = self._load_file_data(path, file_format)
-        
-        # 統一的驗證和處理入口
-        normalized_data = self._process_data_with_validation(raw_data, schema_config)
-        
-        # 用處理後的資料建立 Table
-        simple_schema = self._create_simple_schema(schema)
-        
-        # 將 dict 轉成 schema 需要的格式
+
+        # Apply validation automatically (framework handles it)
+        normalized_data = self._validate_batch(raw_data)
+
+        # Create Table with processed data
+        simple_schema = self._create_simple_schema()
+
+        # Convert dict to schema format
         rows = []
         field_names = list(simple_schema.__annotations__.keys())
         for row_dict in normalized_data:
-            # 按 schema 順序取值，轉成 tuple
+            # Extract values in schema order, convert to tuple
             row_tuple = tuple(row_dict.get(field, None) for field in field_names)
             rows.append(row_tuple)
-        
+
         return pw.debug.table_from_rows(schema=simple_schema, rows=rows)
-    
+
     def _load_file_data(self, file_path: str, file_format: str) -> List[Dict[str, Any]]:
-        """載入檔案資料為 Python 物件。
-        
+        """Load file data as Python objects.
+
         Args:
-            file_path: 檔案路徑
-            file_format: 檔案格式
-            
+            file_path: File path
+            file_format: File format
+
         Returns:
-            資料列表
+            Data list
         """
         import csv
         import json
-        
-        if file_format == 'csv':
-            with open(file_path, 'r', encoding='utf-8') as f:
+
+        if file_format == "csv":
+            with open(file_path, "r", encoding="utf-8") as f:
                 return list(csv.DictReader(f))
-        
-        elif file_format in ('json', 'jsonl'):
+
+        elif file_format in ("json", "jsonl"):
             data = []
-            with open(file_path, 'r', encoding='utf-8') as f:
-                if file_format == 'json':
+            with open(file_path, "r", encoding="utf-8") as f:
+                if file_format == "json":
                     content = json.load(f)
-                    # 如果是陣列就展開，否則當成單一物件
+                    # If it's an array, expand it; otherwise treat as single object
                     if isinstance(content, list):
                         data = content
                     else:
@@ -262,64 +267,50 @@ class FileSource(BaseSource):
                         if line:
                             data.append(json.loads(line))
             return data
-        
-        elif file_format == 'parquet':
-            # Parquet 需要用 pandas 或 pyarrow 讀取
-            try:
-                import pandas as pd
-                df = pd.read_parquet(file_path)
-                return df.to_dict('records')
-            except ImportError:
-                raise ImportError("strict 模式讀取 Parquet 需要安裝 pandas")
-        
+
         return []
-    
-    def _create_simple_schema(self, original_schema: Type[pw.Schema]) -> Type[pw.Schema]:
-        """建立簡化的 schema（特殊型別已經轉成基本型別）。
-        
-        Args:
-            original_schema: 原始 schema
-            
+
+    def _create_simple_schema(self) -> Type[pw.Schema]:
+        """Create simplified schema (special types already converted to basic types).
+
         Returns:
-            簡化的 schema（只包含基本型別）
-        """
-        # 從 original_schema 取得欄位，但型別簡化
-        # 因為資料已經 dump 成基本型別，所以大部分欄位可以用 Any 或推導
-        # 最簡單的方式是不指定 schema，讓 Pathway 自動推導
-        # 但為了保持欄位順序和型別一致，我們從 config 重新解析
-        schema_config = self.config.get('schema', {})
-        if not schema_config:
-            return None
+            Simplified schema (contains only basic types)
         
-        # 使用已經處理好的映射邏輯
-        from pwetl.utils.schema import SchemaParser
+        Raises:
+            ValueError: If schema config is not provided (should not happen if called correctly)
+        """
+        # Get fields from original_schema, but simplify types
+        # Since data has been dumped to basic types, most fields can use Any or be inferred
+        # Simplest approach is not to specify schema, let Pathway auto-infer
+        # But to maintain field order and type consistency, we re-parse from config
+        schema_config = self.config.get("schema", {})
+        if not schema_config:
+            # This should not happen if validation is done correctly in read()
+            raise ValueError(
+                "Schema configuration is missing. "
+                "This is an internal error - schema should be validated before calling this method."
+            )
+
+        # Use already processed mapping logic
         return SchemaParser.parse(schema_config)
 
     def _read_csv(self, path: str, schema: Optional[Type[pw.Schema]]) -> pw.Table:
-        """讀取 CSV 檔案。"""
-        mode = self.config['mode']
+        """Read CSV file."""
+        mode = self.config["mode"]
         if schema:
             return pw.io.csv.read(path, schema=schema, mode=mode)
         return pw.io.csv.read(path, mode=mode)
 
     def _read_json(self, path: str, schema: Optional[Type[pw.Schema]]) -> pw.Table:
-        """讀取 JSON 檔案（單一物件或陣列）。"""
-        mode = self.config['mode']
+        """Read JSON file (single object or array)."""
+        mode = self.config["mode"]
         if schema:
             return pw.io.jsonlines.read(path, schema=schema, mode=mode)
         return pw.io.jsonlines.read(path, mode=mode)
 
     def _read_jsonl(self, path: str, schema: Optional[Type[pw.Schema]]) -> pw.Table:
-        """讀取 JSONL 檔案（每行一個 JSON 物件）。"""
-        mode = self.config['mode']
+        """Read JSONL file (one JSON object per line)."""
+        mode = self.config["mode"]
         if schema:
             return pw.io.jsonlines.read(path, schema=schema, mode=mode)
         return pw.io.jsonlines.read(path, mode=mode)
-
-    def _read_parquet(
-        self, path: str, _schema: Optional[Type[pw.Schema]]
-    ) -> pw.Table:
-        """讀取 Parquet 檔案。"""
-        mode = self.config['mode']
-        # Parquet 檔案已經包含 schema 資訊
-        return pw.io.parquet.read(path, mode=mode)

@@ -1,80 +1,162 @@
 """Base class for all data sources."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pathway as pw
 
 
 class BaseSource(ABC):
-    """所有 Source 的抽象基類。
+    """Abstract base class for all Sources.
 
-    所有自定義 Source 都必須繼承此類別並實作 read() 方法。
+    All custom Sources must inherit this class and implement the read() method.
     """
 
-    # 子類可以覆寫這些屬性來定義必要和可選的配置參數
+    # Subclasses can override these attributes to define required and optional config parameters
     required_config: List[str] = []
     optional_config: Dict[str, Any] = {}
 
     def __init__(self, name: str, config: Dict[str, Any]):
-        """初始化 Source。
+        """Initialize Source.
 
         Args:
-            name: Source 的名稱，用於在 Pipeline 中識別
-            config: Source 的配置參數
+            name: Source name, used to identify in Pipeline
+            config: Source configuration parameters
         """
         self.name = name
         self.config = config
         self._validate_config()
 
     def _validate_config(self) -> None:
-        """驗證配置參數。
+        """Validate configuration parameters.
 
-        檢查必要參數是否存在，並設定可選參數的預設值。
+        Check if required parameters exist and set default values for optional parameters.
 
         Raises:
-            ValueError: 當缺少必要參數時
+            ValueError: When required parameters are missing
         """
-        # 檢查必要參數
+        # Check required parameters
         for key in self.required_config:
             if key not in self.config:
-                raise ValueError(f"Source '{self.name}' 缺少必要配置參數: {key}")
+                raise ValueError(
+                    f"Source '{self.name}' is missing required configuration parameter: {key}"
+                )
 
-        # 設定可選參數的預設值
+        # Set default values for optional parameters
         for key, default in self.optional_config.items():
             self.config.setdefault(key, default)
 
     def _get_validation_mode(self) -> str:
-        """取得驗證模式。
+        """Get validation mode.
 
         Returns:
-            驗證模式: 'sample' (預設), 'strict', 'none'
+            Validation mode: 'sample' (default), 'strict', 'none'
         """
         return self.config.get("validation_mode", "sample")
+
+    def _get_validation_model(self):
+        """Get Pydantic validation model from schema config.
+
+        Returns:
+            Pydantic model class, or None if validation not needed
+        """
+        validation_mode = self._get_validation_mode()
+        if validation_mode == "none":
+            return None
+
+        schema_config = self.config.get("schema")
+        if not schema_config:
+            return None
+
+        try:
+            from pwetl.utils.schema import SchemaParser
+
+            return SchemaParser.create_pydantic_model(schema_config)
+        except Exception as e:
+            import warnings
+
+            warnings.warn(f"Cannot create validation model: {e}", UserWarning)
+            return None
+
+    def _validate_record(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Validate a single record (for streaming sources).
+
+        This method is for streaming sources that process records one at a time.
+
+        Args:
+            record: Single data record
+
+        Returns:
+            Validated/normalized record, or None if validation fails in strict mode
+
+        Raises:
+            ValueError: When validation fails in strict mode
+        """
+        validation_mode = self._get_validation_mode()
+        if validation_mode == "none":
+            return record
+
+        pydantic_model = self._get_validation_model()
+        if pydantic_model is None:
+            return record
+
+        from pydantic import ValidationError
+
+        try:
+            validated = pydantic_model(**record)
+            # Always normalize data after successful validation
+            return validated.model_dump()
+
+        except ValidationError as e:
+            if validation_mode == "strict":
+                # In strict mode, raise error
+                raise ValueError(f"Data validation failed: {e}") from e
+            # In sample mode, log warning and return original
+            import warnings
+
+            warnings.warn(f"Validation warning: {e}", UserWarning, stacklevel=2)
+            return record
+
+    def _validate_batch(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Validate a batch of records (for batch sources).
+
+        This method is for batch sources that load all data at once.
+        Equivalent to _process_data_with_validation but with clearer naming.
+
+        Args:
+            data: List of data records
+
+        Returns:
+            Validated/normalized data list
+
+        Raises:
+            ValueError: When validation fails in strict mode
+        """
+        return self._process_data_with_validation(data, self.config.get("schema", {}))
 
     def _process_data_with_validation(
         self, data: List[Dict[str, Any]], schema_config: Dict
     ) -> List[Dict[str, Any]]:
-        """根據 validation_mode 處理資料。
+        """Process data according to validation_mode.
 
-        這是統一的入口，自動根據配置選擇驗證策略：
-        - none: 不處理，直接返回
-        - sample: 驗證採樣，顯示警告，返回原始資料
-        - strict: 全部驗證並標準化，失敗則拋出錯誤
+        Unified entry point that automatically selects validation strategy based on config:
+        - none: No processing, return directly
+        - sample: Validate sampling, show warnings, return original data
+        - strict: Validate and normalize all data, raise error on failure
 
         Args:
-            data: 資料列表
-            schema_config: Schema 配置
+            data: List of data records
+            schema_config: Schema configuration
 
         Returns:
-            處理後的資料列表（strict 模式下會標準化）
+            Processed data list (normalized in strict mode)
 
         Raises:
-            ValueError: strict 模式下驗證失敗
+            ValueError: When validation fails in strict mode
         """
         validation_mode = self._get_validation_mode()
 
-        # none 模式：不處理
+        # none mode: No processing
         if validation_mode == "none" or not schema_config:
             return data
 
@@ -85,14 +167,14 @@ class BaseSource(ABC):
         from pydantic import ValidationError
         from pwetl.utils.schema import SchemaParser
 
-        # 建立 Pydantic 模型
+        # Create Pydantic model
         try:
             pydantic_model = SchemaParser.create_pydantic_model(schema_config)
         except Exception as e:
-            warnings.warn(f"無法建立驗證模型: {e}", UserWarning)
+            warnings.warn(f"Cannot create validation model: {e}", UserWarning)
             return data
 
-        # strict 模式：驗證並轉換所有資料
+        # strict mode: Validate and convert all data, raise error on failure
         if validation_mode == "strict":
             normalized_data = []
             errors = []
@@ -100,7 +182,7 @@ class BaseSource(ABC):
             for idx, row in enumerate(data):
                 try:
                     validated = pydantic_model(**row)
-                    # 轉換為基本型別（UUID→str, Decimal→float 等）
+                    # Convert to basic types (UUID→str, Decimal→float, etc.)
                     normalized_data.append(validated.model_dump())
                 except ValidationError as e:
                     errors.append({"row": idx + 1, "errors": e.errors()})
@@ -108,30 +190,45 @@ class BaseSource(ABC):
             if errors:
                 self._show_validation_errors(errors, mode="strict")
                 raise ValueError(
-                    f"strict 模式下發現 {len(errors)} 行資料驗證失敗，請修正資料"
+                    f"strict mode: {len(errors)} rows failed validation, please fix the data"
                 )
 
             return normalized_data
 
-        # sample 模式：只驗證，不轉換
-        self._validate_schema_data_sample(data, pydantic_model)
-        return data
+        # sample mode: Validate and convert all data, but only warn on errors
+        normalized_data = []
+        errors = []
+
+        for idx, row in enumerate(data):
+            try:
+                validated = pydantic_model(**row)
+                # Always normalize data after successful validation
+                normalized_data.append(validated.model_dump())
+            except ValidationError as e:
+                # On error, keep original data and record error
+                normalized_data.append(row)
+                errors.append({"row": idx + 1, "errors": e.errors()})
+
+        if errors:
+            self._show_validation_errors(errors, mode="sample")
+
+        return normalized_data
 
     def _validate_schema_data_sample(
         self, data: List[Dict[str, Any]], pydantic_model
     ) -> None:
-        """採樣驗證資料（原有邏輯）。
+        """Sample validation of data (original logic).
 
         Args:
-            data: 資料列表
-            pydantic_model: Pydantic 模型
+            data: List of data records
+            pydantic_model: Pydantic model
         """
         from pydantic import ValidationError
 
         if not data:
             return
 
-        # 驗證所有資料
+        # Validate all data
         errors = []
         max_errors_to_show = 10
 
@@ -144,80 +241,85 @@ class BaseSource(ABC):
                 if len(errors) >= max_errors_to_show:
                     break
 
-        # 如果發現錯誤，顯示警告
+        # If errors found, show warnings
         if errors:
             self._show_validation_errors(errors, mode="sample")
 
     def _show_validation_errors(self, errors: List[Dict], mode: str = "sample") -> None:
-        """顯示驗證錯誤。
+        """Display validation errors.
 
         Args:
-            errors: 錯誤列表
-            mode: 驗證模式
+            errors: List of errors
+            mode: Validation mode
         """
         import warnings
 
         if mode == "strict":
             warning_parts = [
-                f"\n❌ 資料驗證失敗 (strict 模式): 發現 {len(errors)} 行資料不符合 schema",
-                f"   strict 模式要求所有資料必須通過驗證\n",
+                "\nData validation failed (strict mode): "
+                f"{len(errors)} rows do not match schema",
+                "   strict mode requires all data to pass validation\n",
             ]
         else:
             warning_parts = [
-                f"\n⚠️  資料驗證警告: 發現 {len(errors)} 行資料不符合 schema",
-                f"   這些行在執行時可能會被 Pathway 過濾掉\n",
+                f"\nData validation warning: {len(errors)} rows do not match schema",
+                "   These rows may be filtered out by Pathway during execution\n",
             ]
 
-            # 顯示錯誤詳情
-            for error_info in errors[:5]:  # 最多顯示前 5 行的詳細錯誤
-                warning_parts.append(f"   第 {error_info['row']} 行:")
-                for err in error_info["errors"][:3]:  # 每行最多顯示 3 個錯誤
+            # Show error details
+            for error_info in errors[:5]:  # Show details for first 5 rows at most
+                warning_parts.append(f"   Row {error_info['row']}:")
+                for err in error_info["errors"][:3]:  # Show at most 3 errors per row
                     field = ".".join(str(x) for x in err["loc"])
                     msg = err["msg"]
                     warning_parts.append(f"     - {field}: {msg}")
                 if len(error_info["errors"]) > 3:
                     warning_parts.append(
-                        f"     ... (還有 {len(error_info['errors']) - 3} 個錯誤)"
+                        f"     ... ({len(error_info['errors']) - 3} more errors)"
                     )
 
             if len(errors) > 5:
-                warning_parts.append(f"\n   ... (還有 {len(errors) - 5} 行有錯誤)")
+                warning_parts.append(
+                    f"\n   ... ({len(errors) - 5} more rows with errors)"
+                )
 
             if mode == "sample":
-                warning_parts.append("\n   💡 建議:")
+                warning_parts.append("\n   Suggestions:")
                 warning_parts.append(
-                    "      - 將可為 null 的欄位改為 Optional (例如: 'Address: str?')"
+                    "      - Make nullable fields Optional (e.g., 'Address: str?')"
                 )
                 warning_parts.append(
-                    "      - 或在配置中添加 'validation_mode: none' 跳過檢查"
+                    "      - Or add 'validation_mode: none' "
+                    "in config to skip validation"
                 )
                 warning_parts.append(
-                    "      - 或使用 'validation_mode: strict' 強制驗證所有資料\n"
+                    "      - Or use 'validation_mode: strict' "
+                    "to enforce validation on all data\n"
                 )
 
             warnings.warn("\n".join(warning_parts), UserWarning, stacklevel=4)
 
     @abstractmethod
     def read(self) -> pw.Table:
-        """讀取資料並回傳 Pathway Table。
+        """Read data and return Pathway Table.
 
         Returns:
-            pw.Table: 包含資料的 Pathway Table
+            pw.Table: Pathway Table containing the data
 
         Raises:
-            Exception: 讀取失敗時拋出異常
+            Exception: When read fails
         """
 
     def setup(self) -> None:
-        """初始化資源（可選）。
+        """Initialize resources (optional).
 
-        在 read() 之前被呼叫，用於建立連線、載入資源等。
-        子類可以覆寫此方法。
+        Called before read(), used to establish connections, load resources, etc.
+        Subclasses can override this method.
         """
 
     def teardown(self) -> None:
-        """清理資源（可選）。
+        """Clean up resources (optional).
 
-        在 read() 之後被呼叫，用於關閉連線、釋放資源等。
-        子類可以覆寫此方法。
+        Called after read(), used to close connections, release resources, etc.
+        Subclasses can override this method.
         """

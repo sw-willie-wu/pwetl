@@ -1,4 +1,5 @@
-"""配置載入器。"""
+"""Configuration loader."""
+
 from pathlib import Path
 from typing import Any, Dict, Union
 
@@ -7,113 +8,114 @@ from pydantic import ValidationError
 
 from pwetl.core.schema import BaseETLSchema
 from pwetl.utils.env import EnvVarSubstitution
+from pwetl.core.exceptions import ConfigurationError
 
 
 class ConfigLoader:
-    """YAML 配置載入器。
+    """YAML configuration loader.
 
-    負責：
-    1. 載入 YAML 配置檔案
-    2. 替換環境變數
-    3. 驗證配置結構（使用 Pydantic）
+    Responsibilities:
+    1. Load YAML configuration files
+    2. Substitute environment variables
+    3. Validate configuration structure using Pydantic
     """
 
     @staticmethod
     def load(config_path: Union[str, Path]) -> Dict[str, Any]:
-        """載入並驗證配置檔案。
+        """Load and validate configuration file.
 
         Args:
-            config_path: 配置檔案路徑
+            config_path: Path to configuration file
 
         Returns:
-            解析後的配置字典
+            Parsed configuration dictionary
 
         Raises:
-            FileNotFoundError: 當配置檔案不存在時
-            ValueError: 當配置格式錯誤時
-            yaml.YAMLError: 當 YAML 語法錯誤時
+            FileNotFoundError: When configuration file does not exist
+            ConfigurationError: When configuration format is invalid
+            yaml.YAMLError: When YAML syntax is invalid
         """
         path = Path(config_path)
 
-        # 檢查檔案是否存在
+        # Check if file exists
         if not path.exists():
-            raise FileNotFoundError(f"配置檔案不存在: {config_path}")
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-        # 載入 YAML
+        # Load YAML
         with open(path, "r", encoding="utf-8") as f:
             try:
                 config_dict = yaml.safe_load(f)
             except yaml.YAMLError as e:
-                raise ValueError(f"YAML 語法錯誤: {e}") from e
+                raise ConfigurationError(f"YAML syntax error: {e}") from e
 
         if config_dict is None:
-            raise ValueError("配置檔案是空的")
+            raise ConfigurationError("Configuration file is empty")
 
-        # 替換環境變數
+        # Substitute environment variables
         config_dict = EnvVarSubstitution.substitute(config_dict)
 
-        # 使用 Pydantic 驗證配置結構
+        # Validate configuration structure using Pydantic
         try:
             config_model = BaseETLSchema(**config_dict)
         except ValidationError as e:
-            # 格式化 Pydantic 錯誤訊息為更友善的格式
+            # Format Pydantic errors in a more user-friendly way
             error_messages = []
             for error in e.errors():
                 loc = " -> ".join(str(x) for x in error["loc"])
                 msg = error["msg"]
                 error_messages.append(f"  - {loc}: {msg}")
 
-            raise ValueError(
-                "配置驗證失敗:\n" + "\n".join(error_messages)
+            raise ConfigurationError(
+                "Configuration validation failed:\n" + "\n".join(error_messages)
             ) from e
 
-        # 轉換為字典格式（保持向後兼容）
+        # Convert to dictionary format (for backward compatibility)
         return config_model.to_dict()
 
     @staticmethod
     def load_as_model(config_path: Union[str, Path]) -> BaseETLSchema:
-        """載入配置並回傳 Pydantic 模型。
+        """Load configuration and return as Pydantic model.
 
         Args:
-            config_path: 配置檔案路徑
+            config_path: Path to configuration file
 
         Returns:
-            BaseETLSchema 模型實例
+            BaseETLSchema model instance
 
         Raises:
-            FileNotFoundError: 當配置檔案不存在時
-            ValueError: 當配置格式錯誤時
+            FileNotFoundError: When configuration file does not exist
+            ConfigurationError: When configuration format is invalid
         """
         path = Path(config_path)
 
-        # 檢查檔案是否存在
+        # Check if file exists
         if not path.exists():
-            raise FileNotFoundError(f"配置檔案不存在: {config_path}")
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-        # 載入 YAML
+        # Load YAML
         with open(path, "r", encoding="utf-8") as f:
             try:
                 config_dict = yaml.safe_load(f)
             except yaml.YAMLError as e:
-                raise ValueError(f"YAML 語法錯誤: {e}") from e
+                raise ConfigurationError(f"YAML syntax error: {e}") from e
 
         if config_dict is None:
-            raise ValueError("配置檔案是空的")
+            raise ConfigurationError("Configuration file is empty")
 
-        # 替換環境變數
+        # Substitute environment variables
         config_dict = EnvVarSubstitution.substitute(config_dict)
 
-        # 使用 Pydantic 驗證配置結構
+        # Validate configuration structure using Pydantic
         try:
             return BaseETLSchema(**config_dict)
         except ValidationError as e:
-            # 格式化 Pydantic 錯誤訊息
+            # Format Pydantic error messages
             error_messages = []
             for error in e.errors():
                 loc = " -> ".join(str(x) for x in error["loc"])
                 msg = error["msg"]
                 error_messages.append(f"  - {loc}: {msg}")
 
-            raise ValueError(
-                "配置驗證失敗:\n" + "\n".join(error_messages)
+            raise ConfigurationError(
+                "Configuration validation failed:\n" + "\n".join(error_messages)
             ) from e

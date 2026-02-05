@@ -1,4 +1,4 @@
-"""環境變數替換工具。"""
+"""Environment variable substitution utility."""
 import os
 import re
 from pathlib import Path
@@ -6,27 +6,27 @@ from typing import Any, Union
 
 
 class EnvVarSubstitution:
-    """環境變數替換工具。
+    """Environment variable substitution utility.
 
-    支援兩種語法：
-    - ${VAR_NAME}: 必須存在的環境變數
-    - ${VAR_NAME:default}: 有預設值的環境變數
+    Supports two syntaxes:
+    - ${VAR_NAME}: Required environment variable
+    - ${VAR_NAME:default}: Environment variable with default value
     """
 
     ENV_VAR_PATTERN = re.compile(r'\$\{([^}:]+)(?::([^}]*))?\}')
 
     @classmethod
     def substitute(cls, value: Any) -> Any:
-        """遞迴替換環境變數。
+        """Recursively substitute environment variables.
 
         Args:
-            value: 要處理的值，可以是 str, dict, list 或其他類型
+            value: Value to process, can be str, dict, list, or other types
 
         Returns:
-            替換後的值
+            Substituted value
 
         Raises:
-            ValueError: 當必要的環境變數不存在時
+            ValueError: When required environment variable does not exist
         """
         if isinstance(value, str):
             return cls._substitute_string(value)
@@ -38,16 +38,16 @@ class EnvVarSubstitution:
 
     @classmethod
     def _substitute_string(cls, value: str) -> str:
-        """替換字串中的環境變數。
+        """Substitute environment variables in string.
 
         Args:
-            value: 要處理的字串
+            value: String to process
 
         Returns:
-            替換後的字串
+            Substituted string
 
         Raises:
-            ValueError: 當必要的環境變數不存在時
+            ValueError: When required environment variable does not exist
         """
         def replace_var(match):
             var_name = match.group(1)
@@ -59,7 +59,7 @@ class EnvVarSubstitution:
                 if default_value is not None:
                     return default_value
                 raise ValueError(
-                    f"環境變數 '{var_name}' 不存在且沒有預設值"
+                    f"Environment variable '{var_name}' does not exist and has no default value"
                 )
 
             return env_value
@@ -68,10 +68,10 @@ class EnvVarSubstitution:
 
 
 def load_env_file(env_file: Union[str, Path] = '.env') -> None:
-    """載入 .env 檔案。
+    """Load .env file.
 
     Args:
-        env_file: .env 檔案的路徑，預設為當前目錄下的 .env
+        env_file: Path to .env file, defaults to .env in current directory
     """
     env_path = Path(env_file)
 
@@ -82,22 +82,22 @@ def load_env_file(env_file: Union[str, Path] = '.env') -> None:
         for line in f:
             line = line.strip()
 
-            # 跳過空行和註解
+            # Skip empty lines and comments
             if not line or line.startswith('#'):
                 continue
 
-            # 解析 KEY=VALUE 格式
+            # Parse KEY=VALUE format
             if '=' in line:
                 key, value = line.split('=', 1)
                 key = key.strip()
                 value = value.strip()
 
-                # 移除引號
+                # Remove quotes
                 if value.startswith('"') and value.endswith('"'):
                     value = value[1:-1]
                 elif value.startswith("'") and value.endswith("'"):
                     value = value[1:-1]
 
-                # 只有在環境變數不存在時才設定
+                # Only set if environment variable doesn't exist
                 if key not in os.environ:
                     os.environ[key] = value

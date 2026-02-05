@@ -11,9 +11,9 @@ __all__ = [
     'DatabaseSource',
 ]
 
-# 註冊函數，避免循環引用
+# Registration function to avoid circular imports
 def _register_sources():
-    """註冊內建 Sources 到 Registry。"""
+    """Register built-in Sources to Registry."""
     from pwetl.core.registry import SOURCE_REGISTRY
 
     SOURCE_REGISTRY.update({
@@ -21,7 +21,6 @@ def _register_sources():
         'csv': FileSource,
         'json': FileSource,
         'jsonl': FileSource,
-        'parquet': FileSource,
         'api': APISource,
         'postgresql': DatabaseSource,
         'mysql': DatabaseSource,

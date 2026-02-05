@@ -1,25 +1,26 @@
 """Base class for all data sinks."""
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 import pathway as pw
 
 
 class BaseSink(ABC):
-    """所有 Sink 的抽象基類。
+    """Abstract base class for all Sinks.
 
-    所有自定義 Sink 都必須繼承此類別並實作 write() 方法。
+    All custom Sinks must inherit this class and implement the write() method.
     """
 
-    # 子類可以覆寫這些屬性來定義必要和可選的配置參數
+    # Subclasses can override these attributes to define required and optional config parameters
     required_config: List[str] = []
     optional_config: Dict[str, Any] = {}
 
     def __init__(self, name: str, config: Dict[str, Any]):
-        """初始化 Sink。
+        """Initialize Sink.
 
         Args:
-            name: Sink 的名稱，用於在 Pipeline 中識別
-            config: Sink 的配置參數
+            name: Sink name, used to identify in Pipeline
+            config: Sink configuration parameters
         """
         self.name = name
         self.config = config
@@ -28,85 +29,87 @@ class BaseSink(ABC):
         self._setup_schema()
 
     def _validate_config(self) -> None:
-        """驗證配置參數。
+        """Validate configuration parameters.
 
-        檢查必要參數是否存在，並設定可選參數的預設值。
+        Check if required parameters exist and set default values for optional parameters.
 
         Raises:
-            ValueError: 當缺少必要參數時
+            ValueError: When required parameters are missing
         """
-        # 檢查必要參數
+        # Check required parameters
         for key in self.required_config:
             if key not in self.config:
                 raise ValueError(
-                    f"Sink '{self.name}' 缺少必要配置參數: {key}"
+                    f"Sink '{self.name}' is missing required configuration parameter: {key}"
                 )
 
-        # 設定可選參數的預設值
+        # Set default values for optional parameters
         for key, default in self.optional_config.items():
             self.config.setdefault(key, default)
 
     @abstractmethod
     def write(self, table: pw.Table) -> None:
-        """寫入 Pathway Table。
+        """Write Pathway Table.
 
         Args:
-            table: 要寫入的 Pathway Table
+            table: Pathway Table to write
 
         Raises:
-            Exception: 寫入失敗時拋出異常
+            Exception: When write fails
         """
 
     def setup(self) -> None:
-        """初始化資源（可選）。
+        """Initialize resources (optional).
 
-        在 write() 之前被呼叫，用於建立連線、建立資料表等。
-        子類可以覆寫此方法。
+        Called before write(), used to establish connections, create tables, etc.
+        Subclasses can override this method.
         """
 
     def teardown(self) -> None:
-        """清理資源（可選）。
+        """Clean up resources (optional).
 
-        在 write() 之後被呼叫，用於關閉連線、釋放資源等。
-        子類可以覆寫此方法。
+        Called after write(), used to close connections, release resources, etc.
+        Subclasses can override this method.
         """
 
     def _setup_schema(self) -> None:
-        """設定 schema（如果配置中有定義）。"""
-        if 'schema' in self.config:
+        """Set up schema (if defined in configuration)."""
+        if "schema" in self.config:
             from pwetl.utils.schema import SchemaParser
-            self.schema_class = SchemaParser.parse(self.config['schema'])
+
+            self.schema_class = SchemaParser.parse(self.config["schema"])
 
     def _apply_schema(self, table: pw.Table) -> pw.Table:
-        """應用 schema 到 table（如果有定義 schema）。
+        """Apply schema to table (if schema is defined).
 
         Args:
-            table: 輸入的 Pathway Table
+            table: Input Pathway Table
 
         Returns:
-            應用 schema 後的 Table，如果沒有定義 schema 則返回原 table
+            Table after applying schema, returns original table if no schema is defined
         """
         if self.schema_class is None:
             return table
 
-        # 根據 schema 的類型注解進行選擇和轉換
+        # Select and convert based on schema type annotations
         selections = {}
         for field, field_type in self.schema_class.__annotations__.items():
-            # 取得原始類型（去除 Optional）
+            # Get the original type (remove Optional)
             import typing
+
             origin = typing.get_origin(field_type)
             if origin is typing.Union:
-                # Optional[T] 是 Union[T, None]
+                # Optional[T] is Union[T, None]
                 args = typing.get_args(field_type)
                 actual_type = args[0] if args else field_type
             else:
                 actual_type = field_type
-            
-            # 根據類型進行轉換
+
+            # Convert based on type
             if actual_type in (int, float, bool, str):
                 selections[field] = pw.cast(actual_type, pw.this[field])
             else:
-                # 其他類型（如 dict, datetime 等）直接選擇
+                # Other types (dict, datetime, etc.) are selected directly
                 selections[field] = pw.this[field]
-        
+
         return table.select(**selections)

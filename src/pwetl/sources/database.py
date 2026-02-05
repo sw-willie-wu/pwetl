@@ -6,49 +6,49 @@ from pwetl.utils.schema import SchemaParser
 
 
 class DatabaseSource(BaseSource):
-    """資料庫資料源。
+    """Database data source.
 
-    支援 PostgreSQL 和 MySQL。
+    Supports PostgreSQL and MySQL.
     """
 
     required_config = ['db_type', 'host', 'database', 'table']
     optional_config = {
-        'port': None,       # 預設端口由 db_type 決定
-        'user': None,       # 使用者名稱
-        'password': None,   # 密碼
-        'query': None,      # 自訂 SQL 查詢（優先於 table）
-        'schema': None,     # 可選的 Schema
+        'port': None,       # Default port determined by db_type
+        'user': None,       # Username
+        'password': None,   # Password
+        'query': None,      # Custom SQL query (takes precedence over table)
+        'schema': None,     # Optional schema
     }
 
-    # 支援的資料庫類型及其預設端口
+    # Supported database types and their default ports
     DB_DEFAULTS = {
         'postgresql': 5432,
         'mysql': 3306,
     }
 
     def __init__(self, name: str, config: Dict[str, Any]):
-        """初始化資料庫 Source。"""
+        """Initialize database Source."""
         super().__init__(name, config)
 
-        # 設定預設端口
+        # Set default port
         if self.config.get('port') is None:
             db_type = self.config['db_type']
             if db_type in self.DB_DEFAULTS:
                 self.config['port'] = self.DB_DEFAULTS[db_type]
             else:
                 raise ValueError(
-                    f"不支援的資料庫類型: '{db_type}'\n"
-                    f"支援的類型: {', '.join(self.DB_DEFAULTS.keys())}"
+                    f"Unsupported database type: '{db_type}'\n"
+                    f"Supported types: {', '.join(self.DB_DEFAULTS.keys())}"
                 )
 
     def read(self) -> pw.Table:
-        """從資料庫讀取資料。
+        """Read data from database.
 
         Returns:
-            pw.Table: 包含資料的 Pathway Table
+            pw.Table: Pathway Table containing the data
 
         Raises:
-            ValueError: 當資料庫類型不支援時
+            ValueError: When database type is not supported
         """
         db_type = self.config['db_type']
 
@@ -57,22 +57,22 @@ class DatabaseSource(BaseSource):
         if db_type == 'mysql':
             return self._read_mysql()
         raise ValueError(
-            f"不支援的資料庫類型: '{db_type}'\n"
-            f"支援的類型: {', '.join(self.DB_DEFAULTS.keys())}"
+            f"Unsupported database type: '{db_type}'\n"
+            f"Supported types: {', '.join(self.DB_DEFAULTS.keys())}"
         )
 
     def _read_postgresql(self) -> pw.Table:
-        """從 PostgreSQL 讀取資料。"""
-        # 建立連線字串
+        """Read data from PostgreSQL."""
+        # Build connection string
         conn_str = self._build_postgres_conn_str()
 
-        # 取得查詢
+        # Get query
         query = self._get_query()
 
-        # 解析 Schema
+        # Parse schema
         schema = self._get_schema()
 
-        # 讀取資料
+        # Read data
         if schema:
             return pw.io.postgres.read(
                 conn_str,
@@ -85,17 +85,17 @@ class DatabaseSource(BaseSource):
         )
 
     def _read_mysql(self) -> pw.Table:
-        """從 MySQL 讀取資料。"""
-        # MySQL 需要使用 connector
+        """Read data from MySQL."""
+        # MySQL requires connector
         try:
             import mysql.connector  # pylint: disable=unused-import
         except ImportError as exc:
             raise ImportError(
-                "MySQL 支援需要安裝額外套件：\n"
-                "pip install 'pwetl[mysql]' 或 pip install mysql-connector-python"
+                "MySQL support requires additional package:\n"
+                "pip install 'pwetl[mysql]' or pip install mysql-connector-python"
             ) from exc
 
-        # 建立連線配置
+        # Build connection configuration
         conn_config = {
             'host': self.config['host'],
             'port': self.config['port'],
@@ -104,27 +104,30 @@ class DatabaseSource(BaseSource):
             'password': self.config.get('password'),
         }
 
-        # 取得查詢
+        # Get query
         query = self._get_query()
 
-        # 建立連線
+        # Create connection
         conn = mysql.connector.connect(**conn_config)
         cursor = conn.cursor(dictionary=True)
 
         try:
-            # 執行查詢
+            # Execute query
             cursor.execute(query)
             data = cursor.fetchall()
 
-            # 轉換為 Pathway Table（透過 JSONL）
-            return self._data_to_table(data)
+            # Apply validation automatically (framework handles it)
+            validated_data = self._validate_batch(data)
+
+            # Convert to Pathway Table (via JSONL)
+            return self._data_to_table(validated_data)
 
         finally:
             cursor.close()
             conn.close()
 
     def _build_postgres_conn_str(self) -> str:
-        """建立 PostgreSQL 連線字串。"""
+        """Build PostgreSQL connection string."""
         user = self.config.get('user', 'postgres')
         password = self.config.get('password', '')
         host = self.config['host']
@@ -134,25 +137,25 @@ class DatabaseSource(BaseSource):
         return f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
     def _get_query(self) -> str:
-        """取得 SQL 查詢。
+        """Get SQL query.
 
         Returns:
-            SQL 查詢字串
+            SQL query string
         """
-        # 優先使用自訂查詢
+        # Prioritize custom query
         query = self.config.get('query')
         if query:
             return query
 
-        # 否則使用簡單的 SELECT * FROM table
+        # Otherwise use simple SELECT * FROM table
         table = self.config['table']
         return f"SELECT * FROM {table}"
 
     def _get_schema(self) -> Optional[Type[pw.Schema]]:
-        """取得 Schema。
+        """Get schema.
 
         Returns:
-            Pathway Schema 類別，如果沒有指定則回傳 None
+            Pathway Schema class, or None if not specified
         """
         schema_config = self.config.get('schema')
         if schema_config:
@@ -160,24 +163,24 @@ class DatabaseSource(BaseSource):
         return None
 
     def _data_to_table(self, data: list) -> pw.Table:
-        """將資料轉換為 Pathway Table。"""
+        """Convert data to Pathway Table."""
         import tempfile
         import json
         import os
 
-        # 建立暫存檔案
+        # Create temporary file
         fd, temp_path = tempfile.mkstemp(suffix='.jsonl', text=True)
 
         try:
-            # 寫入資料
+            # Write data
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 for item in data:
                     f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
-            # 解析 Schema
+            # Parse schema
             schema = self._get_schema()
 
-            # 讀取為 Pathway Table
+            # Read as Pathway Table
             if schema:
                 table = pw.io.jsonlines.read(temp_path, schema=schema, mode='static')
             else:
