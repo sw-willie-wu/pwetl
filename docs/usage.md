@@ -10,12 +10,6 @@ pwetl 提供命令列介面，讓你可以直接從終端機執行 ETL pipeline�
 pwetl --config config.yaml
 ```
 
-在 WSL/Linux 環境中使用 Python 模組方式：
-
-```bash
-python -m pwetl.cli --config config.yaml
-```
-
 ### 命令列選項
 
 #### `--config` (必需)
@@ -24,7 +18,7 @@ python -m pwetl.cli --config config.yaml
 
 ```bash
 pwetl --config config.yaml
-pwetl --config examples/02_wra_waterlevel/config.yaml
+pwetl --config examples/01_api_source/config_static.yaml
 ```
 
 #### `--verbose`, `-v`
@@ -50,108 +44,257 @@ pwetl --config config.yaml --dry-run
 - 必要欄位是否存在
 - Transform 模組是否可以載入
 
-#### `--env-file`
+## 配置檔結構
 
-指定要載入的 .env 檔案路徑。
+### 基本結構
 
-```bash
-pwetl --config config.yaml --env-file .env.production
+```yaml
+# 資料源配置（單個或多個）
+sources:
+  - name: users               # Source 名稱
+    type: file                # Source 類型
+    path: users.csv           # 檔案路徑
+    format: csv               # 檔案格式
+    schema:                   # 資料結構定義
+      id: int
+      name: str
+      email: str
+
+# Transform 配置
+transform: transform.MyTransform  # Transform 類別路徑
+
+# 輸出目標配置（單個或多個）
+sinks:
+  - name: output              # Sink 名稱
+    type: file                # Sink 類型
+    path: output.csv          # 輸出路徑
+    format: csv               # 輸出格式
 ```
 
-如果不指定，會自動嘗試載入當前目錄的 `.env` 檔案（如果存在）。
+### Source 類型
 
-#### `--version`
+#### File Source
 
-顯示 pwetl 版本。
-
-```bash
-pwetl --version
-# 輸出: pwetl 0.1.0
+```yaml
+sources:
+  - name: data
+    type: file
+    path: data.csv            # 檔案路徑或 glob pattern
+    format: csv               # csv, json, jsonl
+    schema:
+      id: int
+      name: str
 ```
+
+#### API Source
+
+```yaml
+sources:
+  - name: api_data
+    type: api
+    url: ${API_URL}           # API endpoint
+    mode: static              # static 或 streaming
+    refresh_interval: 60      # streaming 模式的更新間隔（秒）
+    validation_mode: sample   # none, sample, strict
+    pydantic_model: models.MyModel
+    schema:
+      id: int
+      value: str
+```
+
+#### Database Source
+
+```yaml
+sources:
+  - name: db_data
+    type: postgres            # 或 mysql
+    host: ${DB_HOST}
+    port: 5432
+    database: ${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    query: "SELECT * FROM users"
+    schema:
+      id: int
+      name: str
+```
+
+### Sink 類型
+
+#### File Sink
+
+```yaml
+sinks:
+  - name: output
+    type: file
+    path: output.csv
+    format: csv               # csv, json, jsonl
+```
+
+#### Database Sink
+
+```yaml
+sinks:
+  - name: db_output
+    type: postgres            # 或 mysql
+    host: localhost
+    port: 5432
+    database: mydb
+    username: user
+    password: pass
+    table: output_table
+```
+
+#### API Sink
+
+```yaml
+sinks:
+  - name: api_output
+    type: api
+    url: https://api.example.com/data
+    method: POST
+```
+
+### Schema 定義
+
+支援的型別：
+
+```yaml
+schema:
+  # 基本型別
+  id: int
+  name: str
+  price: float
+  active: bool
+  
+  # 日期時間（會轉換為字串，因為 Pathway 的限制）
+  created_at: str
+  
+  # Optional 型別（使用 Pydantic 驗證時）
+  address: str?             # Optional[str]
+  age: int?                 # Optional[int]
+```
+
+### 資料驗證
+
+使用 Pydantic 模型進行資料驗證：
+
+```yaml
+sources:
+  - name: data
+    type: api
+    url: ${API_URL}
+    validation_mode: sample   # none, sample, strict
+    pydantic_model: models.MyModel
+```
+
+**驗證模式：**
+- `none`: 跳過驗證
+- `sample`: 驗證第一筆資料，失敗時警告但繼續
+- `strict`: 驗證所有資料，失敗時中斷執行
 
 ## 使用範例
 
-### 範例 1：基本執行
+### 範例 1：基本 CSV 轉換
 
 ```bash
-cd examples/02_wra_waterlevel
-python -m pwetl.cli --config config.yaml
+cd my-test/01_basic_csv
+pwetl --config config.yaml
 ```
 
-### 範例 2：詳細模式
+### 範例 2：API 資料處理（靜態模式）
 
 ```bash
-python -m pwetl.cli --config config.yaml --verbose
+cd examples/01_api_source
+pwetl --config config_static.yaml
 ```
 
-### 範例 3：驗證配置
+### 範例 3：API 資料處理（串流模式）
 
 ```bash
-# 只驗證配置，不執行
-python -m pwetl.cli --config config.yaml --dry-run --verbose
+cd examples/01_api_source
+pwetl --config config_streaming.yaml
 ```
 
-### 範例 4：使用環境變數
+### 範例 4：驗證配置
 
 ```bash
-# 載入特定的環境變數檔案
-python -m pwetl.cli --config config.yaml --env-file .env.production
+pwetl --config config.yaml --dry-run --verbose
 ```
 
-### 範例 5：多源多目標
+### 範例 5：使用環境變數
 
 ```bash
-# 執行多源多目標 pipeline
-cd examples/03_multi_source
-python -m pwetl.cli --config config.yaml --verbose
+# 確保 .env 檔案存在
+pwetl --config config.yaml
 ```
 
-## 在 WSL 環境中執行
+## 環境變數
 
-由於 Pathway 需要 Linux 環境，請務必在 WSL 中執行：
+在配置檔中使用環境變數：
 
-```bash
-# 進入專案目錄
-cd /mnt/c/Users/your_username/path/to/pwetl
-
-# 啟動虛擬環境
-source .venv/bin/activate
-
-# 執行 ETL
-python -m pwetl.cli --config config.yaml
+```yaml
+sources:
+  - name: api_data
+    type: api
+    url: ${API_URL}           # 必須設定
+    headers:
+      Authorization: "Bearer ${API_TOKEN}"
 ```
 
-## 退出碼
+詳細說明請參考 [環境變數配置指南](environment-variables.md)。
 
-CLI 使用標準退出碼：
+## Transform 編寫
 
-- `0` - 成功
-- `1` - 一般錯誤（配置錯誤、執行失敗等）
-- `130` - 使用者中斷（Ctrl+C）
+Transform 類別必須繼承 `BaseTransform` 並實作 `transform` 方法：
 
-## 常見問題
+```python
+from pwetl.transforms import BaseTransform
+import pathway as pw
 
-### Q: 命令找不到
+class MyTransform(BaseTransform):
+    def transform(self, tables):
+        """處理資料。
 
-```bash
-$ pwetl --config config.yaml
-pwetl: command not found
+        Args:
+            tables: Dict[source_name, pw.Table] - 來自所有 sources 的資料表
+
+        Returns:
+            Dict[sink_name, pw.Table] - 輸出到各個 sinks 的資料表
+        """
+        # 單一 source
+        data = tables['data']
+        
+        # 資料轉換
+        result = data.select(
+            id=pw.this.id,
+            name=pw.this.name.str.upper(),
+        )
+        
+        # 單一 sink
+        return {'output': result}
 ```
 
-**解決方法**：
+### 多 Source 多 Sink
 
-```bash
-# 使用 Python 模組方式執行
-python -m pwetl.cli --config config.yaml
+```python
+def transform(self, tables):
+    # 處理多個 sources
+    source1 = tables['source1']
+    source2 = tables['source2']
+    
+    # 合併或 join
+    combined = source1.join(source2, ...)
+    
+    # 輸出到多個 sinks
+    return {
+        'sink1': result1,
+        'sink2': result2,
+    }
 ```
 
-### Q: 在 Windows 上執行失敗
+## 進階主題
 
-A: Pathway 需要 Linux 環境。請在 WSL 中執行。詳見[安裝指南](installation.md)。
-
-## 參考
-
-- [安裝指南](installation.md)
+- [多資料源和多輸出目標](multi-source-sink.md)
 - [環境變數配置](environment-variables.md)
-- [多源多匯設計](multi-source-sink.md)
-- [主文件](../README.md)
+- [自訂 Source/Sink](../README.md#擴展)

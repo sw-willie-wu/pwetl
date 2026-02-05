@@ -12,7 +12,17 @@ disable=
     # C0415: 在某些情況下需要在函數內導入（避免循環引用、可選依賴）
     import-outside-toplevel,
     # R0801: 重複代碼檢查太嚴格，某些類似結構是合理的
-    duplicate-code
+    duplicate-code,
+    # W0718: ETL 框架需要捕獲廣泛異常以保持穩定性
+    broad-exception-caught,
+    # R0914: ETL 處理邏輯需要較多局部變數追蹤狀態
+    too-many-locals,
+    # R1702: 複雜的資料處理邏輯需要多層嵌套
+    too-many-nested-blocks,
+    # R0902: API 連接器等類需要多個配置屬性
+    too-many-instance-attributes,
+    # R0917: API 連接器初始化需要多個參數
+    too-many-positional-arguments
 
 [FORMAT]
 # 每行最大字符數
