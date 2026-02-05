@@ -1,6 +1,5 @@
 """Command-line interface for pwetl."""
 import argparse
-import logging
 import sys
 from pathlib import Path
 
@@ -9,100 +8,106 @@ from pwetl.utils.logger import setup_logger
 
 
 def cli_entry_point():
-    """CLI 入口點。"""
+    """CLI entry point."""
     parser = argparse.ArgumentParser(
         prog='pwetl',
         description='pwetl - A flexible ETL framework based on Pathway',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-範例:
-  # 基本執行
+        epilog="""Examples:
+  # Basic execution
   pwetl --config config.yaml
 
-  # 詳細模式
+  # Verbose mode
   pwetl --config config.yaml --verbose
 
-  # 只驗證配置
+  # Validate configuration only
   pwetl --config config.yaml --dry-run
 
-  # 指定 .env 檔案
+  # Specify .env file
   pwetl --config config.yaml --env-file .env.production
 
-更多資訊請參閱: https://github.com/yourusername/pwetl
+For more information: https://github.com/yourusername/pwetl
         """,
     )
 
-    # 必須參數
+    # Required arguments
     parser.add_argument(
         '--config',
         required=True,
         type=str,
-        help='配置檔案路徑（YAML 格式）',
+        help='Path to configuration file (YAML format)',
     )
 
-    # 可選參數
+    # Optional arguments
     parser.add_argument(
         '--verbose',
         '-v',
         action='store_true',
-        help='顯示詳細輸出',
+        help='Show detailed output',
     )
 
     parser.add_argument(
         '--dry-run',
         action='store_true',
-        help='只驗證配置，不執行 ETL',
+        help='Validate configuration only, do not execute ETL',
     )
 
     parser.add_argument(
         '--env-file',
         type=str,
         default=None,
-        help='指定 .env 檔案路徑（預設: .env）',
+        help='Specify .env file path (default: .env)',
+    )
+
+    parser.add_argument(
+        '--log-config',
+        type=str,
+        default=None,
+        help='Path to logging configuration file (YAML or JSON format)',
     )
 
     parser.add_argument(
         '--version',
         action='version',
         version='pwetl 0.1.0',
-        help='顯示版本資訊',
+        help='Show version information',
     )
 
-    # 解析參數
+    # Parse arguments
     args = parser.parse_args()
 
-    # 設置日誌
-    logger = setup_logger(verbose=args.verbose)
+    # Setup logging
+    logger = setup_logger(verbose=args.verbose, log_config=args.log_config)
 
-    # 執行
+    # Execute
     try:
-        # 檢查配置檔案是否存在
+        # Check if configuration file exists
         config_path = Path(args.config)
         if not config_path.exists():
-            logger.error(f"配置檔案不存在: {args.config}")
+            logger.error("Configuration file not found: %s", args.config)
             sys.exit(1)
 
-        # 建立 ETL Engine
+        # Create ETL Engine
         engine = ETLEngine(
             config_path=args.config,
             env_file=args.env_file,
             verbose=args.verbose,
         )
 
-        # 執行或驗證
+        # Execute or validate
         if args.dry_run:
             engine.dry_run()
         else:
             engine.execute()
 
     except KeyboardInterrupt:
-        logger.warning("\n使用者中斷執行")
+        logger.warning("\nExecution interrupted by user")
         sys.exit(130)
 
     except Exception as e:
-        logger.error(f"執行失敗: {e}")
+        logger.error("Execution failed: %s", e)
         if args.verbose:
-            logger.exception("詳細錯誤訊息:")
+            logger.exception("Detailed error information:")
         sys.exit(1)
 
 
