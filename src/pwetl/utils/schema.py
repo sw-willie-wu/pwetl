@@ -1,115 +1,94 @@
-"""Schema 解析工具。"""
+"""Schema parsing utilities.
 
+Design Philosophy:
+1. Users can only write Pydantic-compatible types in YAML
+2. SchemaParser first creates a Pydantic Model for data validation
+3. Then converts Pydantic types to Pathway Schema types
+"""
+
+import datetime
 from types import UnionType
-from typing import Dict, Type, Optional, Union, get_origin
+from typing import Dict, Type, Optional, Union, get_origin, get_args
 
 import pathway as pw
 import pydantic
 from pydantic import BaseModel, create_model
-
-# 延遲導入以支援動態查找
-try:
-    import datetime as datetime_module
-except ImportError:
-    datetime_module = None
-
-try:
-    import decimal as decimal_module
-except ImportError:
-    decimal_module = None
-
-try:
-    import uuid as uuid_module
-except ImportError:
-    uuid_module = None
+from pwetl.core.exceptions import SchemaError
 
 
 class SchemaParser:
-    """Pathway Schema 解析工具。"""
+    """Schema parser based on Pydantic types."""
 
-    # 型態對應表：YAML 字串 -> Python/Pathway 型態（常用簡寫）
-    TYPE_MAP: Dict[str, Type] = {
-        "str": str,
-        "int": int,
-        "float": float,
-        "bool": bool,
-        "bytes": bytes,
-        "datetime": pw.DateTimeNaive,
-        "duration": pw.Duration,
-        "json": pw.Json,
-    }
-
-    # Pydantic 型態對應（常用簡寫）
+    # Pydantic type mapping: YAML string -> Pydantic type (common abbreviations)
     PYDANTIC_TYPE_MAP: Dict[str, Type] = {
         "str": str,
         "int": int,
         "float": float,
         "bool": bool,
         "bytes": bytes,
-        "datetime": datetime_module.datetime if datetime_module else str,
-        "duration": str,
-        "json": dict,
+        "datetime": datetime.datetime,
+        "dict": dict,
+        "list": list,
     }
 
-    # Pathway 動態查找模組（按順序嘗試）
-    PATHWAY_MODULES = [pw]
+    # Pydantic modules for dynamic type lookup (try in order)
+    PYDANTIC_MODULES = [pydantic]  # EmailStr, HttpUrl, UUID4, etc.
 
-    # Pydantic 動態查找模組（按順序嘗試）
-    PYDANTIC_MODULES = [pydantic]  # EmailStr, HttpUrl, etc.
+    # Pydantic special type mappings
+    PYDANTIC_STR_TYPES = (
+        "EmailStr",
+        "HttpUrl",
+        "AnyUrl",
+        "UUID4",
+        "UUID1",
+        "IPvAnyAddress",
+        "NameEmail",
+    )
+    PYDANTIC_FLOAT_TYPES = ("Decimal", "condecimal")
 
-    # Pathway 特定型別 → Pydantic 相容型別的映射
-    PATHWAY_TO_PYDANTIC: Dict[str, Type] = {
-        "DateTimeNaive": str,  # Pathway 的 DateTimeNaive 對應 Pydantic 的 str
-        "DateTime": str,
-        "Duration": str,
-        "Json": dict,  # 注意：使用 dict 而不是 pydantic.Json
+    # Pydantic type → Pathway type mapping
+    PYDANTIC_TO_PATHWAY: Dict[Type, Type] = {
+        str: str,
+        int: int,
+        float: float,
+        bool: bool,
+        bytes: bytes,
+        datetime.datetime: pw.DateTimeNaive,
+        dict: pw.Json,
+        list: pw.Json,
+        # Pydantic special types (essentially string validation)
+        type(None): type(None),  # for Optional
     }
 
-    # Pydantic 特定型別 → Pathway 相容型別的映射
-    # 大多數 Pydantic 特殊型別（EmailStr, HttpUrl 等）本質上是字串驗證
-    PYDANTIC_TO_PATHWAY: Dict[str, Type] = {
-        "EmailStr": str,
-        "HttpUrl": str,
-        "AnyUrl": str,
-        "IPvAnyAddress": str,
-        "NameEmail": str,
-        "UUID": str,  # UUID → str for Pathway
-        "Decimal": float,  # Decimal → float for Pathway
-        # 可以根據需要繼續添加
-    }
-
-    # 通用型別模組（兩者都可用）
+    # Common type modules
     @classmethod
     def _get_common_type_modules(cls):
-        """取得通用型別模組列表（動態構建以避免 import 錯誤）。"""
-        modules = [
+        """Get list of common type modules."""
+        return [
             __builtins__ if isinstance(__builtins__, dict) else vars(__builtins__),
+            datetime,
         ]
-        # 添加可選的標準庫模組
-        if datetime_module is not None:
-            modules.append(datetime_module)
-        if decimal_module is not None:
-            modules.append(decimal_module)
-        if uuid_module is not None:
-            modules.append(uuid_module)
-        return modules
 
     @classmethod
     def parse(cls, schema_config: Dict[str, Union[str, Dict]]) -> Type[pw.Schema]:
-        """從配置建立 Pathway Schema。
+        """Create Pathway Schema from configuration.
+
+        Process:
+        1. First parse into Pydantic types
+        2. Then convert to Pathway Schema types
 
         Args:
-            schema_config: Schema 配置，格式為 {欄位名稱: 型態字串或嵌套字典}
-                例如：
-                - 簡單型態: {'id': 'int', 'name': 'str'}
+            schema_config: Schema configuration in format {field_name: type_string or nested_dict}
+                Examples:
+                - Simple types: {'id': 'int', 'name': 'str'}
                 - Optional: {'address': 'str?', 'age': 'int?'}
-                - 嵌套物件: {'Point': {'Latitude': 'float', 'Longitude': 'float'}}
+                - Nested objects: {'Point': {'Latitude': 'float', 'Longitude': 'float'}}
 
         Returns:
-            Pathway Schema 類別
+            Pathway Schema class
 
         Raises:
-            ValueError: 當型態不支援時
+            ValueError: When type is not supported
 
         Example:
             >>> schema_config = {
@@ -120,35 +99,84 @@ class SchemaParser:
             ... }
             >>> schema = SchemaParser.parse(schema_config)
         """
-        # 驗證並解析所有型態
-        annotations = {}
+        # 1. First parse into Pydantic types
+        pydantic_annotations = {}
         for field_name, type_def in schema_config.items():
-            annotations[field_name] = cls._parse_type(type_def)
+            pydantic_annotations[field_name] = cls._parse_pydantic_type(
+                type_def, field_name
+            )
 
-        # 動態建立 Schema 類別，使用 __annotations__
-        schema_dict = {"__annotations__": annotations}
+        # 2. Convert to Pathway types
+        pathway_annotations = {}
+        for field_name, pydantic_type in pydantic_annotations.items():
+            pathway_annotations[field_name] = cls._convert_pydantic_to_pathway(
+                pydantic_type
+            )
 
+        # 3. Create Pathway Schema
+        schema_dict = {"__annotations__": pathway_annotations}
         return type("DynamicSchema", (pw.Schema,), schema_dict)
+
+    @classmethod
+    def _convert_pydantic_to_pathway(
+        cls, pydantic_type: Type | UnionType
+    ) -> Type | UnionType:
+        """Convert Pydantic type to Pathway type.
+
+        Args:
+            pydantic_type: Pydantic type
+
+        Returns:
+            Pathway type
+        """
+        # Handle Optional[T] (Union[T, None])
+        origin = get_origin(pydantic_type)
+        if origin is Union:
+            args = get_args(pydantic_type)
+            # Optional[T] case
+            if len(args) == 2 and type(None) in args:
+                non_none_type = args[0] if args[1] is type(None) else args[1]
+                converted = cls._convert_pydantic_to_pathway(non_none_type)
+                return Optional[converted]
+
+        # Handle BaseModel (nested models)
+        if isinstance(pydantic_type, type) and issubclass(pydantic_type, BaseModel):
+            return pw.Json
+
+        # Look up in mapping table
+        if pydantic_type in cls.PYDANTIC_TO_PATHWAY:
+            return cls.PYDANTIC_TO_PATHWAY[pydantic_type]
+
+        # Pydantic special types (EmailStr, HttpUrl, etc.) -> str
+        if isinstance(pydantic_type, type):
+            for base in pydantic_type.mro():
+                if base.__name__ in cls.PYDANTIC_STR_TYPES:
+                    return str
+                if base.__name__ in cls.PYDANTIC_FLOAT_TYPES:
+                    return float
+
+        # Default: keep as-is (might be a basic type)
+        return pydantic_type
 
     @classmethod
     def create_pydantic_model(
         cls, schema_config: Dict[str, Union[str, Dict]], model_name: str = "DataModel"
     ) -> Type[BaseModel]:
-        """從配置建立 Pydantic 模型用於驗證。
+        """Create Pydantic model from configuration for validation.
 
         Args:
-            schema_config: Schema 配置
-            model_name: 模型名稱
+            schema_config: Schema configuration
+            model_name: Model name
 
         Returns:
-            Pydantic BaseModel 類別
+            Pydantic BaseModel class
         """
         fields = {}
 
         for field_name, type_def in schema_config.items():
             field_type = cls._parse_pydantic_type(type_def, field_name)
 
-            # 如果是 Optional 型態，允許 None
+            # If Optional type, allow None
             if get_origin(field_type) is Union:
                 fields[field_name] = (field_type, None)
             else:
@@ -158,22 +186,22 @@ class SchemaParser:
 
     @classmethod
     def _dynamic_type_lookup(cls, type_name: str, search_modules: list) -> Type | None:
-        """從指定模組動態查找型別。
+        """Dynamically look up type from specified modules.
 
         Args:
-            type_name: 型別名稱（例如 'EmailStr', 'HttpUrl', 'UUID'）
-            search_modules: 要搜尋的模組列表
+            type_name: Type name (e.g., 'EmailStr', 'HttpUrl', 'UUID')
+            search_modules: List of modules to search
 
         Returns:
-            找到的型別類別，找不到則返回 None
+            Found type class, or None if not found
         """
         for module in search_modules:
-            # 處理 dict 型的 __builtins__
+            # Handle dict-type __builtins__
             if isinstance(module, dict):
                 if type_name in module:
                     return module[type_name]
             else:
-                # 正常模組
+                # Normal module
                 try:
                     type_class = getattr(module, type_name, None)
                     if type_class is not None:
@@ -186,172 +214,63 @@ class SchemaParser:
     def _parse_pydantic_type(
         cls, type_def: Union[str, Dict], field_name: str = "Field"
     ) -> Type | UnionType:
-        """解析 Pydantic 型態定義。
+        """Parse Pydantic type definition (only accepts Pydantic types).
 
         Args:
-            type_def: 型態定義
-            field_name: 欄位名稱（用於嵌套模型命名）
+            type_def: Type definition
+            field_name: Field name (for nested model naming)
 
         Returns:
-            Pydantic 相容的型態（可能是 Type 或 UnionType）
+            Pydantic-compatible type (can be Type or UnionType)
+
+        Raises:
+            ValueError: When type is not a Pydantic-supported type
         """
-        # 處理嵌套的 schema（字典）- 遞迴創建 Pydantic 模型
+        # Handle nested schema (dict) - recursively create Pydantic model
         if isinstance(type_def, dict):
             nested_model_name = f"{field_name}Model"
             return cls.create_pydantic_model(type_def, nested_model_name)
 
         type_str = type_def
 
-        # 處理 ? 語法（例如 str?, int?）
+        # Handle ? syntax (e.g., str?, int?) -> Optional
         if type_str.endswith("?"):
             base_type_str = type_str[:-1]
+            base_type = cls._resolve_pydantic_type(base_type_str)
+            return Optional[base_type]
 
-            # 先查 map
-            if base_type_str in cls.PYDANTIC_TYPE_MAP:
-                return Optional[cls.PYDANTIC_TYPE_MAP[base_type_str]]
+        # Handle general types
+        return cls._resolve_pydantic_type(type_str)
 
-            # 再查 Pathway 映射表（已知的映射優先）
-            if base_type_str in cls.PATHWAY_TO_PYDANTIC:
-                return Optional[cls.PATHWAY_TO_PYDANTIC[base_type_str]]
+    @classmethod
+    def _resolve_pydantic_type(cls, type_str: str) -> Type:
+        """Resolve type string to Pydantic type.
 
-            # 動態查找 Pydantic 型別
-            base_type = cls._dynamic_type_lookup(
-                base_type_str, cls.PYDANTIC_MODULES + cls._get_common_type_modules()
-            )
-            if base_type:
-                return Optional[base_type]
+        Args:
+            type_str: Type string
 
-            # 嘗試動態從 Pathway 查找
-            pw_type = cls._dynamic_type_lookup(base_type_str, cls.PATHWAY_MODULES)
-            if pw_type:
-                # Pathway 型別沒有對應的映射，使用 object（允許任何值）
-                return Optional[object]
+        Returns:
+            Pydantic type
 
-            raise ValueError(
-                f"不支援的型態: '{base_type_str}'\n"
-                f"支援的內建簡寫: {', '.join(cls.PYDANTIC_TYPE_MAP.keys())}\n"
-                f"或從 pydantic 模組的任何型別（例如 EmailStr, HttpUrl, UUID）"
-            )
-
-        # 處理一般型態
-        # 先查 map（常用簡寫）
+        Raises:
+            ValueError: When type is not supported
+        """
+        # 1. First check common abbreviations
         if type_str in cls.PYDANTIC_TYPE_MAP:
             return cls.PYDANTIC_TYPE_MAP[type_str]
 
-        # 再查 Pathway 映射表
-        if type_str in cls.PATHWAY_TO_PYDANTIC:
-            return cls.PATHWAY_TO_PYDANTIC[type_str]
-
-        # 動態查找 Pydantic 型別
+        # 2. Dynamically look up type in Pydantic modules
         found_type = cls._dynamic_type_lookup(
             type_str, cls.PYDANTIC_MODULES + cls._get_common_type_modules()
         )
         if found_type:
             return found_type
 
-        # 嘗試動態從 Pathway 查找
-        pw_type = cls._dynamic_type_lookup(type_str, cls.PATHWAY_MODULES)
-        if pw_type:
-            # Pathway 型別沒有對應的映射，使用 object（允許任何值）
-            return object
-
-        raise ValueError(
-            f"不支援的型態: '{type_str}'\n"
-            f"支援的內建簡寫: {', '.join(cls.PYDANTIC_TYPE_MAP.keys())}\n"
-            f"或從 pydantic 模組的任何型別（例如 EmailStr, HttpUrl, UUID）\n"
-            f"或使用嵌套字典定義"
+        # 3. Not found, raise error
+        raise SchemaError(
+            f"Unsupported type: '{type_str}'\n"
+            f"Please use Pydantic-supported types:\n"
+            f"  - Built-in abbreviations: {', '.join(cls.PYDANTIC_TYPE_MAP.keys())}\n"
+            f"  - Pydantic special types: EmailStr, HttpUrl, UUID4, constr, condecimal, etc.\n"
+            f"  - Or use nested dict to define complex objects"
         )
-
-    @classmethod
-    def _parse_type(cls, type_def: Union[str, Dict]) -> Type | UnionType:
-        """解析型態定義。
-
-        Args:
-            type_def: 型態定義，可以是：
-                - 字串：'str', 'int', 'str?' 等
-                - 字典：嵌套的 schema 定義
-
-        Returns:
-            對應的 Python 型態
-
-        Raises:
-            ValueError: 當型態不支援時
-        """
-        # 處理嵌套的 schema（字典）
-        if isinstance(type_def, dict):
-            # 遞迴解析嵌套的 schema，返回 pw.Json
-            # Pathway 會將嵌套結構視為 JSON 物件
-            return pw.Json
-
-        # 以下處理字串型態
-        type_str = type_def
-
-        # 處理 ? 語法（例如 str?, int?）
-        if type_str.endswith("?"):
-            base_type_str = type_str[:-1]  # 移除 ?
-
-            # 先查 map
-            if base_type_str in cls.TYPE_MAP:
-                return Optional[cls.TYPE_MAP[base_type_str]]
-
-            # 再查 Pydantic 映射表
-            if base_type_str in cls.PYDANTIC_TO_PATHWAY:
-                return Optional[cls.PYDANTIC_TO_PATHWAY[base_type_str]]
-
-            # 動態查找 Pathway 型別
-            base_type = cls._dynamic_type_lookup(
-                base_type_str, cls.PATHWAY_MODULES + cls._get_common_type_modules()
-            )
-            if base_type:
-                return Optional[base_type]
-
-            # 嘗試動態從 Pydantic 查找，預設映射為 str
-            pydantic_type = cls._dynamic_type_lookup(
-                base_type_str, cls.PYDANTIC_MODULES
-            )
-            if pydantic_type:
-                return Optional[str]  # Pydantic 特殊型別大多是字串驗證
-
-            raise ValueError(
-                f"不支援的型態: '{base_type_str}'\n"
-                f"支援的內建簡寫: {', '.join(cls.TYPE_MAP.keys())}\n"
-                f"或從 pathway 模組的任何型別（例如 DateTimeNaive, Duration, Json）"
-            )
-
-        # 處理一般型態
-        # 先查 map（常用簡寫）
-        if type_str in cls.TYPE_MAP:
-            return cls.TYPE_MAP[type_str]
-
-        # 再查 Pydantic 映射表
-        if type_str in cls.PYDANTIC_TO_PATHWAY:
-            return cls.PYDANTIC_TO_PATHWAY[type_str]
-
-        # 動態查找 Pathway 型別
-        found_type = cls._dynamic_type_lookup(
-            type_str, cls.PATHWAY_MODULES + cls._get_common_type_modules()
-        )
-        if found_type:
-            return found_type
-
-        # 嘗試動態從 Pydantic 查找，預設映射為 str
-        pydantic_type = cls._dynamic_type_lookup(type_str, cls.PYDANTIC_MODULES)
-        if pydantic_type:
-            return str  # Pydantic 特殊型別大多是字串驗證
-
-        raise ValueError(
-            f"不支援的型態: '{type_str}'\n"
-            f"支援的內建簡寫: {', '.join(cls.TYPE_MAP.keys())}\n"
-            f"或從 pathway 模組的任何型別（例如 DateTimeNaive, Duration, Json）\n"
-            f"或使用嵌套字典定義"
-        )
-
-    @classmethod
-    def add_custom_type(cls, type_name: str, type_class: Type) -> None:
-        """新增自定義型態到型態對應表。
-
-        Args:
-            type_name: 型態名稱（在 YAML 中使用）
-            type_class: 對應的 Python 類別
-        """
-        cls.TYPE_MAP[type_name] = type_class
