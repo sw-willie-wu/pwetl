@@ -27,7 +27,7 @@ class TestEnvVarSubstitution:
         """Test that missing required variable raises error."""
         if 'REQUIRED_VAR' in os.environ:
             del os.environ['REQUIRED_VAR']
-        with pytest.raises(ValueError, match="環境變數 'REQUIRED_VAR' 不存在且沒有預設值"):
+        with pytest.raises(ValueError, match="Environment variable 'REQUIRED_VAR' does not exist and has no default value"):
             EnvVarSubstitution.substitute('${REQUIRED_VAR}')
 
     def test_substitute_in_string(self):

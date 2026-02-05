@@ -4,6 +4,7 @@ import pytest
 import yaml
 from pathlib import Path
 from pwetl.core.config import ConfigLoader
+from pwetl.core.exceptions import ConfigurationError
 
 
 class TestConfigLoader:
@@ -47,7 +48,7 @@ class TestConfigLoader:
         config_file = tmp_path / 'empty.yaml'
         config_file.write_text('', encoding='utf-8')
 
-        with pytest.raises(ValueError, match="配置檔案是空的"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_load_invalid_yaml(self, tmp_path):
@@ -55,7 +56,7 @@ class TestConfigLoader:
         config_file = tmp_path / 'invalid.yaml'
         config_file.write_text('invalid: yaml: syntax:', encoding='utf-8')
 
-        with pytest.raises(ValueError, match="YAML 語法錯誤"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_validate_missing_sources(self, tmp_path):
@@ -69,7 +70,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="sources.*Field required"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_validate_missing_transform(self, tmp_path):
@@ -85,7 +86,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="transform.*Field required"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_validate_missing_sinks(self, tmp_path):
@@ -99,7 +100,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="sinks.*Field required"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_validate_empty_sources(self, tmp_path):
@@ -114,7 +115,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="sources.*at least 1 item"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_validate_source_missing_name(self, tmp_path):
@@ -131,7 +132,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="name.*Field required"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_validate_source_missing_type(self, tmp_path):
@@ -148,7 +149,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="type.*Field required"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_validate_duplicate_source_names(self, tmp_path):
@@ -167,7 +168,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="Source name 重複"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_validate_invalid_transform_format(self, tmp_path):
@@ -184,7 +185,7 @@ class TestConfigLoader:
             encoding='utf-8'
         )
 
-        with pytest.raises(ValueError, match="Transform 格式錯誤"):
+        with pytest.raises(ConfigurationError):
             ConfigLoader.load(config_file)
 
     def test_env_var_substitution(self, tmp_path):

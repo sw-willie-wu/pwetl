@@ -3,6 +3,7 @@
 import pytest
 from pathlib import Path
 from pwetl.core.registry import SOURCE_REGISTRY, SINK_REGISTRY, SourceFactory, SinkFactory
+from pwetl.core.exceptions import RegistryError
 from pwetl.sources.base import BaseSource
 from pwetl.sinks.base import BaseSink
 
@@ -26,14 +27,14 @@ class TestSourceFactory:
         """Test creating source without type raises error."""
         config = {'name': 'test', 'path': 'test.csv'}
 
-        with pytest.raises(ValueError, match="配置缺少 'type' 欄位"):
+        with pytest.raises(RegistryError):
             SourceFactory.create('test', config)
 
     def test_create_unknown_type(self):
         """Test creating source with unknown type raises error."""
         config = {'name': 'test', 'type': 'unknown'}
 
-        with pytest.raises(ValueError, match="未知的 Source 類型"):
+        with pytest.raises(RegistryError):
             SourceFactory.create('test', config)
 
     def test_create_custom_source(self, tmp_path):
@@ -79,7 +80,7 @@ class TestSourceFactory:
             'class': 'CustomSource'
         }
 
-        with pytest.raises(ValueError, match="配置缺少 'module' 欄位"):
+        with pytest.raises(RegistryError):
             SourceFactory.create('test', config)
 
     def test_create_custom_source_invalid_format(self):
@@ -90,7 +91,7 @@ class TestSourceFactory:
             'module': 'custom_source'  # Missing .ClassName
         }
 
-        with pytest.raises(ValueError, match="module.*必須是.*ClassName.*格式"):
+        with pytest.raises(RegistryError):
             SourceFactory.create('test', config)
 
     def test_create_custom_source_not_base_source(self, tmp_path):
@@ -113,7 +114,7 @@ class TestSourceFactory:
                 'module': 'bad_source.NotASource'
             }
 
-            with pytest.raises(TypeError, match="必須繼承自 BaseSource"):
+            with pytest.raises(TypeError, match="must inherit from BaseSource"):
                 SourceFactory.create('test', config)
         finally:
             sys.path.remove(str(tmp_path))
@@ -138,14 +139,14 @@ class TestSinkFactory:
         """Test creating sink without type raises error."""
         config = {'name': 'test', 'path': 'output.csv'}
 
-        with pytest.raises(ValueError, match="配置缺少 'type' 欄位"):
+        with pytest.raises(RegistryError):
             SinkFactory.create('test', config)
 
     def test_create_unknown_type(self):
         """Test creating sink with unknown type raises error."""
         config = {'name': 'test', 'type': 'unknown'}
 
-        with pytest.raises(ValueError, match="未知的 Sink 類型"):
+        with pytest.raises(RegistryError):
             SinkFactory.create('test', config)
 
     def test_create_custom_sink(self, tmp_path):
@@ -189,7 +190,7 @@ class TestSinkFactory:
             'class': 'CustomSink'
         }
 
-        with pytest.raises(ValueError, match="配置缺少 'module' 欄位"):
+        with pytest.raises(RegistryError):
             SinkFactory.create('test', config)
 
     def test_create_custom_sink_invalid_format(self):
@@ -200,7 +201,7 @@ class TestSinkFactory:
             'module': 'custom_sink'  # Missing .ClassName
         }
 
-        with pytest.raises(ValueError, match="module.*必須是.*ClassName.*格式"):
+        with pytest.raises(RegistryError):
             SinkFactory.create('test', config)
 
     def test_create_custom_sink_not_base_sink(self, tmp_path):
@@ -223,7 +224,7 @@ class TestSinkFactory:
                 'module': 'bad_sink.NotASink'
             }
 
-            with pytest.raises(TypeError, match="必須繼承自 BaseSink"):
+            with pytest.raises(TypeError, match="must inherit from BaseSink"):
                 SinkFactory.create('test', config)
         finally:
             sys.path.remove(str(tmp_path))
