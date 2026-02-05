@@ -1,0 +1,49 @@
+# YouBike 2.0 即時站點資訊 - Streaming 模式
+# 持續輪詢 API，每 60 秒更新一次資料
+
+sources:
+  - name: youbike
+    type: api
+    url: ${YOUBIKE_API_URL:https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json}
+    method: GET
+    timeout: 30
+    mode: streaming  # 持續運行，定期輪詢
+    refresh_interval: 60     # 每 60 秒輪詢一次
+    validation_mode: sample  # none: 略過驗證, sample: 警告, strict: 強制驗證
+    schema:
+      sno: str
+      sna: str
+      sarea: str
+      mday: str
+      ar: str
+      sareaen: str
+      snaen: str
+      aren: str
+      act: str
+      srcUpdateTime: datetime
+      updateTime: datetime
+      infoTime: datetime
+      infoDate: str
+      Quantity: int
+      available_rent_bikes: int
+      available_return_bikes: int
+      latitude: float
+      longitude: float
+
+transform: transform.YouBikeTransform
+
+sinks:
+  - name: output_csv
+    type: file
+    path: output/streaming/youbike_output.csv
+    format: csv
+  
+  - name: output_json
+    type: file
+    path: output/streaming/youbike_output.json
+    format: json
+  
+  - name: output_jsonl
+    type: file
+    path: output/streaming/youbike_output.jsonl
+    format: jsonl

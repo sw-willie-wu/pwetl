@@ -1,0 +1,26 @@
+sources:
+  - name: random_data
+    type: custom
+    module: custom_source.RandomDataSource
+    count: 50
+    seed: 42
+    min_value: 10
+    max_value: 200
+    schema:
+      id: int
+      name: str
+      value: int
+      category: str
+
+transform: transform.FilterTransform
+
+sinks:
+  - name: high_value
+    type: file
+    path: output/high_value_output.csv
+    format: csv
+    
+  - name: low_value
+    type: file
+    path: output/low_value_output.csv
+    format: csv
