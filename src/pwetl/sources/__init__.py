@@ -22,6 +22,5 @@ def _register_sources():
         'json': FileSource,
         'jsonl': FileSource,
         'api': APISource,
-        'postgresql': DatabaseSource,
-        'mysql': DatabaseSource,
+        'database': DatabaseSource,
     })
