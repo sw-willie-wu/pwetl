@@ -45,8 +45,9 @@ transform: transform.SimpleTransform
 
 sinks:
   - name: output
-    type: csv
+    type: file
     path: {tmp_path / "output.csv"}
+    format: csv
 """
         config_file.write_text(config_content)
 
@@ -112,8 +113,9 @@ transform: transform.PassThroughTransform
 
 sinks:
   - name: output
-    type: csv
+    type: file
     path: ${OUTPUT_PATH}
+    format: csv
 """
             config_file.write_text(config_content)
 
@@ -173,8 +175,9 @@ transform: transform.PassThroughTransform
 
 sinks:
   - name: output
-    type: csv
+    type: file
     path: {tmp_path / "output.csv"}
+    format: csv
 """
             config_file.write_text(config_content)
 
@@ -267,12 +270,14 @@ transform: transform.MultiSourceTransform
 
 sinks:
   - name: output1
-    type: csv
+    type: file
     path: {tmp_path / "output1.csv"}
+    format: csv
 
   - name: output2
-    type: csv
+    type: file
     path: {tmp_path / "output2.csv"}
+    format: csv
 """
             config_file.write_text(config_content)
 

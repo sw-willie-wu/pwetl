@@ -1,0 +1,26 @@
+# Database Source - 自訂 SQL 查詢模式
+# 使用 query_file 指定 .sql 檔，取代自動產生的 SELECT
+
+sources:
+  - name: employees
+    type: database
+    dsn: postgresql://${DB_USER:pwetl}:${DB_PASSWORD:pwetl_pass}@${DB_HOST:localhost}:${DB_PORT:5435}/${DB_NAME:pwetl_demo}
+    query_file: query.sql         # use custom SQL instead of table
+    schema:
+      name: str
+      department: str
+      title: str
+      salary: int
+
+transform: transform.DepartmentSummaryTransform
+
+sinks:
+  - name: summary_csv
+    type: file
+    path: output/department_summary.csv
+    format: csv
+
+  - name: detail_jsonl
+    type: file
+    path: output/employees.jsonl
+    format: jsonl

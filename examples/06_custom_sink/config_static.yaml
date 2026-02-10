@@ -1,3 +1,6 @@
+# Custom Sink - Static 模式
+# 讀取 CSV，輸出為 Markdown 報表及 JSONL
+
 sources:
   - name: products
     type: file

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pwetl"
-version = "0.1.0"
+version = "0.2.0"
 description = "A flexible ETL framework based on Pathway - just write transforms and config YAML to build your ETL service"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -40,20 +40,18 @@ dev = [
     "ruff>=0.1.0",
     "pylint>=3.0.0",
 ]
-postgres = [
-    "psycopg2-binary>=2.9.0",
-]
-mysql = [
-    "mysql-connector-python>=8.0.0",
-]
 database = [
-    "pwetl[postgres,mysql]",
+    "psycopg2-binary>=2.9.0",
+    "sqlalchemy>=2.0.0",
+]
+ssh = [
+    "sshtunnel>=0.4.0",
 ]
 dotenv = [
     "python-dotenv>=1.0.0",
 ]
 all = [
-    "pwetl[dev,database,dotenv]",
+    "pwetl[dev,database,ssh,dotenv]",
 ]
 
 [tool.hatch.build.targets.wheel]

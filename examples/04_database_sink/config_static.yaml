@@ -1,0 +1,30 @@
+# Database Sink - Static 模式
+# 讀取 CSV 一次，寫入資料庫（資料表需事先存在）
+
+sources:
+  - name: sales
+    type: file
+    path: sales_data.csv
+    format: csv
+    mode: static
+    schema:
+      order_id: int
+      product_id: str
+      product_name: str
+      category: str
+      quantity: int
+      unit_price: float
+      order_date: str
+
+transform: transform.SalesTransform
+
+sinks:
+  - name: db_output
+    type: database
+    dsn: postgresql://${DB_USER:pwetl}:${DB_PASSWORD:pwetl_pass}@${DB_HOST:localhost}:${DB_PORT:5436}/${DB_NAME:pwetl_demo}
+    table: sales_summary
+
+  - name: output_csv
+    type: file
+    path: output/sales_summary.csv
+    format: csv

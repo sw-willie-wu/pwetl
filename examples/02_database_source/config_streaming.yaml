@@ -1,0 +1,32 @@
+# Database Source - Streaming 模式
+# 持續輪詢資料庫，每 60 秒更新一次資料
+
+sources:
+  - name: employees
+    type: database
+    dsn: postgresql://${DB_USER:pwetl}:${DB_PASSWORD:pwetl_pass}@${DB_HOST:localhost}:${DB_PORT:5435}/${DB_NAME:pwetl_demo}
+    table: employees
+    mode: streaming
+    refresh_interval: 60          # 每 60 秒輪詢一次
+    diff_ignore_fields:           # 偵測變更時忽略的欄位
+      - hire_date
+    schema:
+      id: int
+      name: str
+      department: str
+      title: str
+      salary: int
+      hire_date: str
+
+transform: transform.DepartmentSummaryTransform
+
+sinks:
+  - name: summary_csv
+    type: file
+    path: output/streaming/department_summary.csv
+    format: csv
+
+  - name: detail_jsonl
+    type: file
+    path: output/streaming/employees.jsonl
+    format: jsonl

@@ -1,0 +1,32 @@
+# Database Sink - Streaming 模式
+# 持續監聽 sales_data.csv 所在目錄，有變更時自動寫入資料庫
+# 搭配 if_not_exists: create，資料表不需事先存在
+
+sources:
+  - name: sales
+    type: file
+    path: sales_data.csv
+    format: csv
+    mode: streaming
+    schema:
+      order_id: int
+      product_id: str
+      product_name: str
+      category: str
+      quantity: int
+      unit_price: float
+      order_date: str
+
+transform: transform.SalesTransform
+
+sinks:
+  - name: db_output
+    type: database
+    dsn: postgresql://${DB_USER:pwetl}:${DB_PASSWORD:pwetl_pass}@${DB_HOST:localhost}:${DB_PORT:5436}/${DB_NAME:pwetl_demo}
+    table: sales_summary_v2
+    if_not_exists: create
+
+  - name: output_csv
+    type: file
+    path: output/sales_summary.csv
+    format: csv

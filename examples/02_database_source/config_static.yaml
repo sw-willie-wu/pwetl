@@ -1,0 +1,29 @@
+# Database Source - Static 模式
+# 執行一次，讀取當下的資料
+
+sources:
+  - name: employees
+    type: database
+    dsn: postgresql://${DB_USER:pwetl}:${DB_PASSWORD:pwetl_pass}@${DB_HOST:localhost}:${DB_PORT:5435}/${DB_NAME:pwetl_demo}
+    table: employees
+    mode: static
+    schema:
+      id: int
+      name: str
+      department: str
+      title: str
+      salary: int
+      hire_date: str
+
+transform: transform.DepartmentSummaryTransform
+
+sinks:
+  - name: summary_csv
+    type: file
+    path: output/static/department_summary.csv
+    format: csv
+
+  - name: detail_jsonl
+    type: file
+    path: output/static/employees.jsonl
+    format: jsonl

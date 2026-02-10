@@ -1,4 +1,4 @@
-# Example 02: Custom Source
+# Example 05: Custom Source
 
 This example demonstrates how to create a custom data source in pwetl.
 
@@ -40,16 +40,16 @@ class RandomDataSource(BaseSource):
 ### Run the Example
 
 ```bash
-cd examples/02_custom_source
-pwetl --config config.yaml
+cd examples/05_custom_source
+pwetl --config config_static.yaml
 ```
 
 ### Expected Output
 
 Two CSV files will be created:
 
-1. `high_value_output.csv` - Records with value >= 100
-2. `low_value_output.csv` - Records with value < 100
+1. `output/high_value_output.csv` - Records with value >= 100
+2. `output/low_value_output.csv` - Records with value < 100
 
 ### Sample Data
 
@@ -109,7 +109,7 @@ def setup(self) -> None:
     pass
 ```
 
-4. **Use in config.yaml**:
+4. **Use in config_static.yaml**:
 
 ```yaml
 sources:
@@ -147,6 +147,6 @@ Custom sources are useful for:
 
 ## See Also
 
-- [Custom Sink Example](../03_custom_sink/)
+- [Custom Sink Example](../06_custom_sink/)
 - [API Source Example](../01_api_source/)
 - [BaseSource Documentation](../../src/pwetl/sources/base.py)

@@ -1,4 +1,4 @@
-# Example 03: Custom Sink
+# Example 06: Custom Sink
 
 This example demonstrates how to create custom sinks in pwetl.
 
@@ -38,8 +38,8 @@ A simple example showing the basic sink pattern.
 ### Run the Example
 
 ```bash
-cd examples/03_custom_sink
-pwetl --config config.yaml
+cd examples/06_custom_sink
+pwetl --config config_static.yaml
 ```
 
 ### Expected Output
@@ -120,7 +120,7 @@ def write(self, table: pw.Table) -> None:
         write_custom_format(f, data)
 ```
 
-### 4. Use in config.yaml
+### 4. Use in config_static.yaml
 
 ```yaml
 sinks:
@@ -203,7 +203,7 @@ def write(self, table: pw.Table) -> None:
 
 ## See Also
 
-- [Custom Source Example](../02_custom_source/)
+- [Custom Source Example](../05_custom_source/)
 - [API Source Example](../01_api_source/)
 - [BaseSink Documentation](../../src/pwetl/sinks/base.py)
-- [Existing Sink Implementations](../../my-test/07_custom_sink/)
+- [API Sink Example](../03_api_sink/)

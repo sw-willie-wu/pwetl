@@ -127,8 +127,9 @@ class TestSinkFactory:
         """Test creating built-in sink."""
         config = {
             'name': 'test',
-            'type': 'csv',
-            'path': 'output.csv'
+            'type': 'file',
+            'path': 'output.csv',
+            'format': 'csv',
         }
 
         sink = SinkFactory.create('test', config)
@@ -242,8 +243,9 @@ class TestRegistry:
     def test_sink_registry_not_empty(self):
         """Test that SINK_REGISTRY contains built-in sinks."""
         assert len(SINK_REGISTRY) > 0
-        assert 'csv' in SINK_REGISTRY
-        assert 'json' in SINK_REGISTRY
+        assert 'file' in SINK_REGISTRY
+        assert 'database' in SINK_REGISTRY
+        assert 'api' in SINK_REGISTRY
 
     def test_registered_sources_are_base_source(self):
         """Test that all registered sources inherit from BaseSource."""

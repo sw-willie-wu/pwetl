@@ -67,70 +67,37 @@ Key fields from the API response:
 
 ## Configuration Files
 
-### 1. config.yaml - Basic Configuration
-
-Static mode with schema validation:
-
-```yaml
-source:
-  type: api
-  config:
-    url: ${YOUBIKE_API_URL}
-    format: json
-    mode: static
-    
-sink:
-  - type: file
-    config:
-      path: output/youbike.csv
-      format: csv
-```
-
-**Configuration Explanation:**
-
-- **source.config.url**: Use environment variable for flexibility
-- **source.config.format**: `json` - API returns JSON array
-- **source.config.mode**: `static` - Fetch once and exit
-- **sink.config.path**: Output file path
-- **sink.config.format**: Output format (csv/json/jsonl)
-
-### 2. config_static.yaml - Static Mode with Multiple Outputs
+### 1. config_static.yaml - Static Mode
 
 Fetch data once and output to multiple formats:
 
 ```yaml
-source:
-  type: api
-  config:
+sources:
+  - name: youbike
+    type: api
     url: ${YOUBIKE_API_URL}
-    format: json
     mode: static
-    validation_mode: sample  # Validate first 100 records only
+    validation_mode: strict
     schema:
       sno: str
       sna: str
-      tot: int
-      available_rent_bikes: int
-      available_return_bikes: int
-      lat: float
-      lng: float
-      updateTime: str
-    
-sink:
-  - type: file
-    config:
-      path: output/youbike.csv
-      format: csv
-  - type: file
-    config:
-      path: output/youbike.json
-      format: json
-  - type: file
-    config:
-      path: output/youbike.jsonl
-      format: jsonl
+      ...
 
-transform: transform.py
+transform: transform.YouBikeTransform
+
+sinks:
+  - name: output_csv
+    type: file
+    path: output/static/youbike_output.csv
+    format: csv
+  - name: output_json
+    type: file
+    path: output/static/youbike_output.json
+    format: json
+  - name: output_jsonl
+    type: file
+    path: output/static/youbike_output.jsonl
+    format: jsonl
 ```
 
 **Key Features:**
@@ -138,36 +105,40 @@ transform: transform.py
 - Schema validation for data quality
 - Custom transform script for data processing
 
-### 3. config_streaming.yaml - Streaming Mode
+### 2. config_streaming.yaml - Streaming Mode
 
 Continuous monitoring with periodic fetching:
 
 ```yaml
-source:
-  type: api
-  config:
+sources:
+  - name: youbike
+    type: api
     url: ${YOUBIKE_API_URL}
-    format: json
     mode: streaming
-    streaming:
-      interval: 30  # Poll every 30 seconds
-    validation_mode: none  # Skip validation in streaming mode
-    
-sink:
-  - type: file
-    config:
-      path: output/youbike_stream.csv
-      format: csv
-      mode: streaming
+    refresh_interval: 60
+    validation_mode: sample
 
-transform: transform.py
+transform: transform.YouBikeTransform
+
+sinks:
+  - name: output_csv
+    type: file
+    path: output/streaming/youbike_output.csv
+    format: csv
+  - name: output_json
+    type: file
+    path: output/streaming/youbike_output.json
+    format: json
+  - name: output_jsonl
+    type: file
+    path: output/streaming/youbike_output.jsonl
+    format: jsonl
 ```
 
 **Streaming Configuration:**
 - **mode**: `streaming` - Continuous operation
-- **streaming.interval**: 30 seconds between API calls
-- **validation_mode**: `none` - Skip validation for performance
-- **sink.config.mode**: `streaming` - Continuously update output file
+- **refresh_interval**: 60 seconds between API calls
+- **validation_mode**: `sample` - Warn but don't stop on validation errors
 
 **Use Cases:**
 - Real-time monitoring dashboards
@@ -202,27 +173,31 @@ The `validation_mode` parameter controls data validation behavior:
 The `transform.py` script processes the raw API data:
 
 ```python
+from pwetl.transforms import BaseTransform
 import pathway as pw
 
-class YouBikeTransform:
-    def transform(self, youbike: pw.Table) -> pw.Table:
-        """Select and rename columns for output."""
-        return youbike.select(
-            站點編號=pw.this.sno,
+class YouBikeTransform(BaseTransform):
+    def transform(self, tables):
+        youbike = tables['youbike']
+
+        result = youbike.select(
+            站點代碼=pw.this.sno,
             站點名稱=pw.this.sna,
             行政區=pw.this.sarea,
+            地址=pw.this.ar,
             可借車輛=pw.this.available_rent_bikes,
             可還空位=pw.this.available_return_bikes,
-            緯度=pw.this.lat,
-            經度=pw.this.lng,
+            緯度=pw.this.latitude,
+            經度=pw.this.longitude,
             更新時間=pw.this.updateTime,
         )
-```
 
-**Transform Features:**
-- Column selection and renaming
-- Data type conversion
-- Calculated fields (e.g., total capacity)
+        return {
+            'output_csv': result,
+            'output_json': result,
+            'output_jsonl': result,
+        }
+```
 
 You can add custom calculations:
 
@@ -288,10 +263,7 @@ pwetl --config config_static.yaml --log-config logging.yaml
 ### Static Mode (One-time Fetch)
 
 ```bash
-# Basic execution
-pwetl --config config.yaml
-
-# With schema validation and multiple outputs
+# Static mode — run once and exit
 pwetl --config config_static.yaml
 
 # With custom logging
@@ -300,10 +272,10 @@ pwetl --config config_static.yaml --log-config logging.yaml
 
 **Expected Output:**
 ```
-2024-01-15 10:30:00,123 - INFO - pwetl.engine - Starting pwetl engine...
-2024-01-15 10:30:01,456 - INFO - pwetl.sources.api - Fetching data from API...
-2024-01-15 10:30:02,789 - INFO - pwetl.sinks.file - Writing 1724 records to output/youbike.csv
-2024-01-15 10:30:03,012 - INFO - pwetl.engine - Pipeline completed successfully
+INFO - Fetching data from API...
+INFO - Fetched 1733 records from API
+INFO - Static mode: API fetch completed, exiting
+INFO - FileSystem(output/static/youbike_output.csv): Done writing 1733 entries
 ```
 
 ### Streaming Mode (Continuous Monitoring)
@@ -313,33 +285,23 @@ pwetl --config config_streaming.yaml
 ```
 
 **Expected Behavior:**
-- Fetches data every 30 seconds
-- Updates output file continuously
+- Fetches data every 60 seconds
+- Updates output files continuously
 - Runs until manually stopped (Ctrl+C)
-
-**Sample Output:**
-```
-2024-01-15 10:30:00,123 - INFO - pwetl.engine - Starting pwetl engine in streaming mode...
-2024-01-15 10:30:01,456 - INFO - pwetl.sources.api - Fetching data from API...
-2024-01-15 10:30:02,789 - INFO - pwetl.sinks.file - Updated 1724 records
-2024-01-15 10:30:32,890 - INFO - pwetl.sources.api - Fetching data from API...
-2024-01-15 10:30:33,123 - INFO - pwetl.sinks.file - Updated 1726 records
-...
-```
 
 To stop: Press `Ctrl+C`
 
 ## Output Examples
 
-### CSV Output (youbike.csv)
+### CSV Output (output/static/youbike_output.csv)
 
 ```csv
 站點編號,站點名稱,行政區,可借車輛,可還空位,緯度,經度,更新時間
-500101001,捷運市政府站(3號出口),信義區,18,32,25.0408578889,121.567904444,2024-01-15T10:30:00+08:00
-500101002,捷運國父紀念館站(2號出口),大安區,25,15,25.041254,121.557508,2024-01-15T10:30:00+08:00
+500101001,捷運市政府站(3號出口),信義區,18,32,25.0408578889,121.567904444,2024-01-15T10:30:00
+500101002,捷運國父紀念館站(2號出口),大安區,25,15,25.041254,121.557508,2024-01-15T10:30:00
 ```
 
-### JSON Output (youbike.json)
+### JSON Output (output/static/youbike_output.json)
 
 ```json
 [
@@ -351,12 +313,12 @@ To stop: Press `Ctrl+C`
     "可還空位": 32,
     "緯度": 25.0408578889,
     "經度": 121.567904444,
-    "更新時間": "2024-01-15T10:30:00+08:00"
+    "更新時間": "2024-01-15T10:30:00"
   }
 ]
 ```
 
-### JSONL Output (youbike.jsonl)
+### JSONL Output (output/static/youbike_output.jsonl)
 
 ```jsonl
 {"站點編號": "500101001", "站點名稱": "捷運市政府站(3號出口)", "行政區": "信義區", ...}
@@ -385,7 +347,7 @@ If you encounter connection errors, check:
 
 If data fields don't match the schema:
 - Check if API response format has changed
-- Update schema definition in config.yaml
+- Update schema definition in config_static.yaml
 - Consider using `validation_mode: none` or omitting schema for automatic inference
 
 ### Output File Already Exists
