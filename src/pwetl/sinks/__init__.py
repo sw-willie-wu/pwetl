@@ -21,11 +21,7 @@ def _register_sinks():
     SINK_REGISTRY.update(
         {
             "file": FileSink,
-            "csv": FileSink,
-            "json": FileSink,
-            "jsonl": FileSink,
-            "postgresql": DatabaseSink,
-            "mysql": DatabaseSink,
+            "database": DatabaseSink,
             "api": APISink,
         }
     )
