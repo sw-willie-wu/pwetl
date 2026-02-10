@@ -1,4 +1,4 @@
-# 範例 03：自訂輸出目標
+# 範例 06：自訂輸出目標
 
 此範例示範如何在 pwetl 中建立自訂 Sink。
 
@@ -38,8 +38,8 @@
 ### 執行範例
 
 ```bash
-cd examples/03_custom_sink
-pwetl --config config.yaml
+cd examples/06_custom_sink
+pwetl --config config_static.yaml
 ```
 
 ### 預期輸出
@@ -120,7 +120,7 @@ def write(self, table: pw.Table) -> None:
         write_custom_format(f, data)
 ```
 
-### 4. 在 config.yaml 中使用
+### 4. 在 config_static.yaml 中使用
 
 ```yaml
 sinks:
@@ -203,7 +203,7 @@ def write(self, table: pw.Table) -> None:
 
 ## 參考
 
-- [自訂 Source 範例](../02_custom_source/)
+- [自訂 Source 範例](../05_custom_source/)
 - [API Source 範例](../01_api_source/)
 - [BaseSink 文件](../../src/pwetl/sinks/base.py)
-- [現有 Sink 實作](../../my-test/07_custom_sink/)
+- [API Sink 範例](../03_api_sink/)

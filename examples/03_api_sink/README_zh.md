@@ -1,4 +1,4 @@
-# 範例 04：API Sink
+# 範例 03：API Sink
 
 此範例示範如何使用 pwetl 的 API Sink 將處理後的資料發送到 API endpoint。
 
@@ -26,7 +26,13 @@ S002,Room_B,23.1,48.5,2026-02-05T10:00:00
 ...
 ```
 
-### 輸出（發送到 API）
+### 輸出
+
+結果同時發送到 API 並寫入本地檔案：
+- **output/sensor_summary.csv** - CSV 格式
+- **output/sensor_summary.jsonl** - JSONL 格式
+
+### API 輸出格式
 
 ```json
 [
@@ -70,13 +76,18 @@ API_URL=https://www.toptal.com/developers/postbin/1234567890
 ### 2. 執行範例
 
 ```bash
-cd examples/04_api_sink
-pwetl --config config.yaml
+cd examples/03_api_sink
+pwetl --config config_static.yaml
 ```
 
 ### 3. 檢查結果
 
-返回 Postbin 頁面查看 POST 請求和處理後的資料！
+```bash
+cat output/sensor_summary.csv
+cat output/sensor_summary.jsonl
+```
+
+如有設定 Postbin，也可到 Postbin 頁面查看 POST 請求。
 
 ## 配置說明
 
@@ -211,6 +222,6 @@ def transform(self, tables):
 
 ## 參考
 
-- [自訂 Sink 範例](../03_custom_sink/) - 建立自訂輸出處理器
+- [自訂 Sink 範例](../06_custom_sink/) - 建立自訂輸出處理器
 - [API Source 範例](../01_api_source/) - 從 API 獲取資料
 - [APISink 文件](../../src/pwetl/sinks/api.py)

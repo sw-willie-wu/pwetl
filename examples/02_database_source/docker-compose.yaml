@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pwetl_postgres_source
+    environment:
+      POSTGRES_USER: pwetl
+      POSTGRES_PASSWORD: pwetl_pass
+      POSTGRES_DB: pwetl_demo
+    ports:
+      - "${DB_PORT:-5435}:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pwetl -d pwetl_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

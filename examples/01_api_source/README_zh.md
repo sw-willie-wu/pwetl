@@ -119,16 +119,16 @@ python -m pwetl.cli --config config_streaming.yaml
 ### Static 模式輸出
 
 執行 `config_static.yaml` 後會產生：
-- **youbike_static_output.csv** - CSV 格式
-- **youbike_static_output.json** - JSON 格式
-- **youbike_static_output.jsonl** - JSON Lines 格式
+- **output/static/youbike_output.csv** - CSV 格式
+- **output/static/youbike_output.json** - JSON 格式
+- **output/static/youbike_output.jsonl** - JSON Lines 格式
 
 ### Streaming 模式輸出
 
 執行 `config_streaming.yaml` 後會產生（並持續更新）：
-- **youbike_streaming_output.csv** - CSV 格式
-- **youbike_streaming_output.json** - JSON 格式
-- **youbike_streaming_output.jsonl** - JSON Lines 格式
+- **output/streaming/youbike_output.csv** - CSV 格式
+- **output/streaming/youbike_output.json** - JSON 格式
+- **output/streaming/youbike_output.jsonl** - JSON Lines 格式
 
 ### 格式說明
 
@@ -180,7 +180,7 @@ result = youbike.select(
 
 如果資料欄位與 schema 不符：
 - 檢查 API 回應格式是否改變
-- 更新 config.yaml 中的 schema 定義
+- 更新 config_static.yaml 中的 schema 定義
 - 可以先不定義 schema，讓系統自動推斷
 
 ### 輸出檔案已存在

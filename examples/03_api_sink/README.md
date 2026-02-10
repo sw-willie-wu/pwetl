@@ -1,4 +1,4 @@
-# Example 04: API Sink
+# Example 03: API Sink
 
 This example demonstrates how to send processed data to an API endpoint using pwetl's API Sink.
 
@@ -26,7 +26,13 @@ S002,Room_B,23.1,48.5,2026-02-05T10:00:00
 ...
 ```
 
-### Output (Sent to API)
+### Output
+
+Results are sent to the API and also written to local files:
+- **output/sensor_summary.csv** - CSV format
+- **output/sensor_summary.jsonl** - JSONL format
+
+### API Output Format
 
 ```json
 [
@@ -70,13 +76,18 @@ API_URL=https://www.toptal.com/developers/postbin/1234567890
 ### 2. Run the Example
 
 ```bash
-cd examples/04_api_sink
-pwetl --config config.yaml
+cd examples/03_api_sink
+pwetl --config config_static.yaml
 ```
 
 ### 3. Check Results
 
-Go back to your Postbin page to see the POST request with the processed data!
+```bash
+cat output/sensor_summary.csv
+cat output/sensor_summary.jsonl
+```
+
+If you set up a Postbin, you can also check the POST request on the Postbin page.
 
 ## Configuration
 
@@ -211,6 +222,6 @@ def transform(self, tables):
 
 ## See Also
 
-- [Custom Sink Example](../03_custom_sink/) - Create custom output handlers
+- [Custom Sink Example](../06_custom_sink/) - Create custom output handlers
 - [API Source Example](../01_api_source/) - Fetch data from APIs
 - [APISink Documentation](../../src/pwetl/sinks/api.py)

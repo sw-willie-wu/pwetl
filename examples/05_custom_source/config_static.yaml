@@ -1,3 +1,6 @@
+# Custom Source - Static 模式
+# 自訂資料源產生隨機資料，依值分流輸出
+
 sources:
   - name: random_data
     type: custom

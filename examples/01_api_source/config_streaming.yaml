@@ -8,6 +8,12 @@ sources:
     method: GET
     timeout: 30
     mode: streaming  # 持續運行，定期輪詢
+    diff_ignore_fields:
+      - mday
+      - srcUpdateTime
+      - updateTime
+      - infoTime
+      - infoDate
     refresh_interval: 60     # 每 60 秒輪詢一次
     validation_mode: sample  # none: 略過驗證, sample: 警告, strict: 強制驗證
     schema:

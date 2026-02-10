@@ -1,0 +1,50 @@
+# API Sink - Static 模式
+# 讀取 CSV 一次，POST 到 API
+
+sources:
+  - name: sensors
+    type: file
+    path: sensor_data.csv
+    format: csv
+    mode: static
+    schema:
+      sensor_id: str
+      location: str
+      temperature: float
+      humidity: float
+      timestamp: str
+
+transform: transform.SensorTransform
+
+sinks:
+  - name: api_json
+    type: api
+    url: ${API_URL:https://httpbin.org/post}
+    method: POST
+    format: json
+    batch_size: 0  # Send all records at once
+    headers:
+      Content-Type: application/json
+    timeout: 30
+    max_retry: 3
+    retry_delay: 1
+
+  - name: api_form
+    type: api
+    url: ${API_URL:https://httpbin.org/post}
+    method: POST
+    format: form
+    batch_size: 1  # Send one record per request
+    timeout: 30
+    max_retry: 3
+    retry_delay: 1
+
+  - name: output_csv
+    type: file
+    path: output/sensor_summary.csv
+    format: csv
+
+  - name: output_jsonl
+    type: file
+    path: output/sensor_summary.jsonl
+    format: jsonl

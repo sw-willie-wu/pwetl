@@ -1,4 +1,4 @@
-# 範例 02：自訂資料源
+# 範例 05：自訂資料源
 
 此範例示範如何在 pwetl 中建立自訂資料源。
 
@@ -40,16 +40,16 @@ class RandomDataSource(BaseSource):
 ### 執行範例
 
 ```bash
-cd examples/02_custom_source
-pwetl --config config.yaml
+cd examples/05_custom_source
+pwetl --config config_static.yaml
 ```
 
 ### 預期輸出
 
 將產生兩個 CSV 檔案：
 
-1. `high_value_output.csv` - value >= 100 的記錄
-2. `low_value_output.csv` - value < 100 的記錄
+1. `output/high_value_output.csv` - value >= 100 的記錄
+2. `output/low_value_output.csv` - value < 100 的記錄
 
 ### 資料範例
 
@@ -109,7 +109,7 @@ def setup(self) -> None:
     pass
 ```
 
-4. **在 config.yaml 中使用**：
+4. **在 config_static.yaml 中使用**：
 
 ```yaml
 sources:
@@ -147,6 +147,6 @@ sources:
 
 ## 參考
 
-- [自訂 Sink 範例](../03_custom_sink/)
+- [自訂 Sink 範例](../06_custom_sink/)
 - [API Source 範例](../01_api_source/)
 - [BaseSource 文件](../../src/pwetl/sources/base.py)

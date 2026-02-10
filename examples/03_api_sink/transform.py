@@ -26,8 +26,10 @@ class SensorTransform(BaseTransform):
             sample_count=pw.reducers.count(),
         )
 
-        # Send same data to both JSON and form endpoints
+        # Send same data to API endpoints and file outputs
         return {
             "api_json": result,
             "api_form": result,
+            "output_csv": result,
+            "output_jsonl": result,
         }
