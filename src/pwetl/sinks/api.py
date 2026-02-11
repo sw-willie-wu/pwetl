@@ -5,6 +5,9 @@ from typing import Any, Dict, List
 import requests
 import pathway as pw
 from pwetl.sinks.base import BaseSink
+from pwetl.utils.logger import get_logger
+
+LOGGER = get_logger(__name__)
 
 
 class APISink(BaseSink):
@@ -73,24 +76,18 @@ class APISink(BaseSink):
         """Clean up resources and send data to API."""
         import json
         import os
-        import logging
-
-        logger = logging.getLogger(__name__)
 
         if not hasattr(self, "_temp_path") or self._temp_path is None:
-            logger.warning("APISink %s: No temp_path attribute", self.name)
+            LOGGER.warning("Sink '%s': no temp_path attribute", self.name)
             return
 
         temp_path: str = self._temp_path
-        logger.info(
-            "APISink %s: Starting teardown with temp file %s",
-            self.name, temp_path
-        )
+        LOGGER.info("Sink '%s': starting teardown with temp file %s", self.name, temp_path)
 
         try:
             # Check if temporary file exists
             if not os.path.exists(temp_path):
-                logger.warning("APISink %s: Temp file does not exist", self.name)
+                LOGGER.warning("Sink '%s': temp file does not exist", self.name)
                 return
 
             # Read data
@@ -101,26 +98,23 @@ class APISink(BaseSink):
                     if line:
                         data.append(json.loads(line))
 
-            logger.info(
-                "APISink %s: Read %d records from temp file",
-                self.name, len(data)
-            )
+            LOGGER.info("Sink '%s': read %d records from temp file", self.name, len(data))
 
             # Send to API
             if data:
-                logger.info(
-                    "APISink %s: Sending data with format=%s",
+                LOGGER.info(
+                    "Sink '%s': sending data with format=%s",
                     self.name, self.config.get('format', 'json')
                 )
                 self._send_to_api(data)
             else:
-                logger.warning("APISink %s: No data to send", self.name)
+                LOGGER.warning("Sink '%s': no data to send", self.name)
 
         finally:
             # Clean up temporary file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-                logger.info("APISink %s: Cleaned up temp file", self.name)
+                LOGGER.info("Sink '%s': cleaned up temp file", self.name)
 
     def _send_to_api(self, data: List[Dict[str, Any]]) -> None:
         """Send data to API.
@@ -208,6 +202,10 @@ class APISink(BaseSink):
             except requests.RequestException as e:
                 # If retries remain, wait and retry
                 if attempt < max_retry:
+                    LOGGER.warning(
+                        "Sink '%s': request failed (attempt %d/%d): %s",
+                        self.name, attempt + 1, max_retry + 1, e,
+                    )
                     time.sleep(retry_delay)
                     continue
                 # Retries exhausted

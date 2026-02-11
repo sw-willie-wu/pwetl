@@ -7,6 +7,9 @@ from typing import Any, Dict, List, Optional, Type
 import pathway as pw
 from pwetl.sources.base import BaseSource
 from pwetl.utils.schema import SchemaParser
+from pwetl.utils.logger import get_logger
+
+LOGGER = get_logger(__name__)
 
 
 class FileSource(BaseSource):
@@ -43,6 +46,8 @@ class FileSource(BaseSource):
         """
         path = self.config["path"]
         file_format = self.config["format"]
+        mode = self.config.get("mode", "static")
+        LOGGER.info("Source '%s': reading %s (%s, %s mode)", self.name, path, file_format, mode)
 
         # Check if path exists
         path_obj = Path(path)

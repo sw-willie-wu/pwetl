@@ -73,7 +73,7 @@ class APIConnectorSubject(HashDiffConnectorMixin, pw.io.python.ConnectorSubject)
                     break
 
                 # Streaming mode: wait before next poll
-                LOGGER.info(
+                LOGGER.debug(
                     "Streaming mode: waiting %d seconds before next poll...", self.refresh_interval
                 )
                 time.sleep(self.refresh_interval)
@@ -83,7 +83,7 @@ class APIConnectorSubject(HashDiffConnectorMixin, pw.io.python.ConnectorSubject)
                 if self.mode == "static":
                     raise
                 # Streaming mode: continue retrying
-                LOGGER.info(
+                LOGGER.debug(
                     "Streaming mode: retrying after %d seconds...", self.refresh_interval
                 )
                 time.sleep(self.refresh_interval)
@@ -107,7 +107,6 @@ class APIConnectorSubject(HashDiffConnectorMixin, pw.io.python.ConnectorSubject)
                 timeout=self.timeout,
             )
             response.raise_for_status()
-            LOGGER.info("fetch api: %d", response.status_code)
         except requests.RequestException as e:
             raise RuntimeError(
                 f"API request failed ({self.method} {self.url}): {e}"

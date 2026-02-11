@@ -4,6 +4,9 @@ import sys
 from pathlib import Path
 
 from pwetl.core.engine import ETLEngine
+from pwetl.core.exceptions import (
+    SourceError, TransformError, SinkError, ConfigurationError,
+)
 from pwetl.utils.logger import setup_logger
 
 
@@ -104,10 +107,34 @@ For more information: https://github.com/yourusername/pwetl
         logger.warning("\nExecution interrupted by user")
         sys.exit(130)
 
+    except SourceError as e:
+        logger.error("[Source] %s", e)
+        if args.verbose:
+            logger.exception("Detailed error:")
+        sys.exit(1)
+
+    except TransformError as e:
+        logger.error("[Transform] %s", e)
+        if args.verbose:
+            logger.exception("Detailed error:")
+        sys.exit(1)
+
+    except SinkError as e:
+        logger.error("[Sink] %s", e)
+        if args.verbose:
+            logger.exception("Detailed error:")
+        sys.exit(1)
+
+    except ConfigurationError as e:
+        logger.error("[Config] %s", e)
+        if args.verbose:
+            logger.exception("Detailed error:")
+        sys.exit(1)
+
     except Exception as e:
         logger.error("Execution failed: %s", e)
         if args.verbose:
-            logger.exception("Detailed error information:")
+            logger.exception("Detailed error:")
         sys.exit(1)
 
 

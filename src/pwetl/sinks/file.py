@@ -5,6 +5,9 @@ from pathlib import Path
 import pathway as pw
 
 from pwetl.sinks.base import BaseSink
+from pwetl.utils.logger import get_logger
+
+LOGGER = get_logger(__name__)
 
 
 class FileSink(BaseSink):
@@ -57,6 +60,8 @@ class FileSink(BaseSink):
         # Ensure directory exists
         Path(path).parent.mkdir(parents=True, exist_ok=True)
 
+        LOGGER.info("Sink '%s': writing %s to %s", self.name, file_format, path)
+
         # Write file based on format
         if file_format == "csv":
             self._write_csv(table, path)
@@ -100,3 +105,4 @@ class FileSink(BaseSink):
 
             # Delete temporary file
             Path(self._jsonl_temp_path).unlink(missing_ok=True)
+            LOGGER.info("Sink '%s': converted JSONL to JSON array", self.name)
