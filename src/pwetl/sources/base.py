@@ -4,6 +4,9 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 import pathway as pw
+from pwetl.utils.logger import get_logger
+
+LOGGER = get_logger(__name__)
 
 
 class BaseSource(ABC):
@@ -73,9 +76,7 @@ class BaseSource(ABC):
 
             return SchemaParser.create_pydantic_model(schema_config)
         except Exception as e:
-            import warnings
-
-            warnings.warn(f"Cannot create validation model: {e}", UserWarning)
+            LOGGER.warning("Source '%s': cannot create validation model: %s", self.name, e)
             return None
 
     def _validate_record(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -112,9 +113,7 @@ class BaseSource(ABC):
                 # In strict mode, raise error
                 raise ValueError(f"Data validation failed: {e}") from e
             # In sample mode, log warning and return original
-            import warnings
-
-            warnings.warn(f"Validation warning: {e}", UserWarning, stacklevel=2)
+            LOGGER.warning("Source '%s': validation warning: %s", self.name, e)
             return record
 
     def _validate_batch(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -163,7 +162,6 @@ class BaseSource(ABC):
         if not data:
             return data
 
-        import warnings
         from pydantic import ValidationError
         from pwetl.utils.schema import SchemaParser
 
@@ -171,7 +169,7 @@ class BaseSource(ABC):
         try:
             pydantic_model = SchemaParser.create_pydantic_model(schema_config)
         except Exception as e:
-            warnings.warn(f"Cannot create validation model: {e}", UserWarning)
+            LOGGER.warning("Source '%s': cannot create validation model: %s", self.name, e)
             return data
 
         # strict mode: Validate and convert all data, raise error on failure
@@ -252,8 +250,6 @@ class BaseSource(ABC):
             errors: List of errors
             mode: Validation mode
         """
-        import warnings
-
         if mode == "strict":
             warning_parts = [
                 "\nData validation failed (strict mode): "
@@ -297,7 +293,7 @@ class BaseSource(ABC):
                     "to enforce validation on all data\n"
                 )
 
-            warnings.warn("\n".join(warning_parts), UserWarning, stacklevel=4)
+            LOGGER.warning("\n".join(warning_parts))
 
     @abstractmethod
     def read(self) -> pw.Table:

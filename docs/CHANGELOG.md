@@ -2,7 +2,32 @@
 
 All notable changes to pwetl will be documented in this file.
 
-## [Unreleased] - 2026-02-05
+## [Unreleased] - 2026-02-11
+
+### Changed
+
+- **統一 Logging 與例外處理**：
+  - 所有檔案頂層宣告 `LOGGER = get_logger(__name__)`，不在方法內 inline 建立
+  - 訊息格式統一：`Source '<name>': ...`、`Sink '<name>': ...`、`Transform: ...`、`Pipeline ...`
+  - `pipeline.py`：`RuntimeError` 全面替換為 `SourceError` / `TransformError` / `SinkError`
+  - `pipeline.py`：新增 INFO log 標記關鍵進度點（starting → setup → read → transform → write → engine run → completed）
+  - `pipeline.py`：teardown 清理失敗從 DEBUG 提升為 WARNING
+  - `engine.py`：移除 `execute()` 中重複的 `LOGGER.error()`，避免同一錯誤輸出兩次
+  - `cli.py`：依例外類別輸出不同前綴（`[Source]`、`[Transform]`、`[Sink]`、`[Config]`）
+  - `sources/base.py`：`warnings.warn()` 全部改用 `LOGGER.warning()`，移除 `import warnings`
+  - `sources/file.py`、`sinks/file.py`：新增頂層 LOGGER 及 INFO log
+  - `sources/api.py`、`sources/database.py`：`setup()` / `read()` / `teardown()` 加 INFO log
+  - `sinks/api.py`：移除 `teardown()` 內的 inline logger，統一用頂層 LOGGER；格式從 `"APISink %s:"` 改為 `"Sink '%s':"`；`_send_batch` retry 加 WARNING
+  - `connector/api.py`：移除多餘的 `fetch api` log，streaming 等待/重試從 INFO 降為 DEBUG
+  - `connector/database.py`：streaming 等待/重試從 INFO 降為 DEBUG
+
+### Documentation
+
+- 新增 `docs/logging.md`：Logging 與例外處理規範（Logger 宣告、訊息格式、等級規則、自訂例外、新增元件 Checklist）
+
+---
+
+## [0.2.0] - 2026-02-05
 
 ### Added
 

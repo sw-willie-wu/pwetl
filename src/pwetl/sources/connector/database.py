@@ -46,7 +46,7 @@ class DatabaseConnectorSubject(HashDiffConnectorMixin, pw.io.python.ConnectorSub
                     LOGGER.info("Static mode: database fetch completed")
                     break
 
-                LOGGER.info(
+                LOGGER.debug(
                     "Streaming mode: waiting %d seconds before next poll...",
                     self._refresh_interval,
                 )
@@ -56,7 +56,7 @@ class DatabaseConnectorSubject(HashDiffConnectorMixin, pw.io.python.ConnectorSub
                 LOGGER.error("Database query failed: %s", e)
                 if self._mode == "static":
                     raise
-                LOGGER.info(
+                LOGGER.debug(
                     "Streaming mode: retrying after %d seconds...",
                     self._refresh_interval,
                 )

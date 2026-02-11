@@ -12,7 +12,7 @@ from pwetl.utils.loader import TransformLoader
 from pwetl.utils.logger import get_logger
 
 
-LOGGER = get_logger()
+LOGGER = get_logger(__name__)
 
 
 class ETLEngine:
@@ -72,12 +72,10 @@ class ETLEngine:
                 raise RuntimeError("Pipeline not initialized, cannot execute.")
             self.pipeline.run()
 
-        except Exception as e:
-            LOGGER.error("Execution failed: %s", e)
+        except Exception:
             if self.verbose:
                 import traceback
 
-                LOGGER.error("\nTraceback:")
                 traceback.print_exc()
             raise
 

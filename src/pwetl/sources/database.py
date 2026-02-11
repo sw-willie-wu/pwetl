@@ -69,6 +69,7 @@ class DatabaseSource(BaseSource):
             ) from exc
 
         self._engine = create_engine(dsn)
+        LOGGER.info("Source '%s': engine created", self.name)
 
         # For streaming mode, create connector
         if self.config['mode'] == 'streaming':
@@ -81,6 +82,7 @@ class DatabaseSource(BaseSource):
                 validate_fn=self._validate_record,
                 diff_ignore_fields=self.config.get('diff_ignore_fields'),
             )
+            LOGGER.info("Source '%s': streaming connector initialized", self.name)
 
     def read(self) -> pw.Table:
         """Read data from database.
@@ -94,6 +96,8 @@ class DatabaseSource(BaseSource):
                 "setup() must be called before read()."
             )
 
+        LOGGER.info("Source '%s': reading (%s mode)", self.name, self.config['mode'])
+
         if self.config['mode'] == 'streaming':
             return self._read_streaming()
         return self._read_static()
@@ -103,6 +107,7 @@ class DatabaseSource(BaseSource):
         if self._engine is not None:
             self._engine.dispose()
             self._engine = None
+            LOGGER.info("Source '%s': engine disposed", self.name)
 
         if self._tunnel is not None:
             self._tunnel.stop()

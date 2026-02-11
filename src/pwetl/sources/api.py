@@ -57,6 +57,7 @@ class APISource(BaseSource):
             validate_fn=self._validate_record,  # Framework provides validation
             diff_ignore_fields=self.config.get("diff_ignore_fields"),
         )
+        LOGGER.info("Source '%s': connector initialized (mode=%s)", self.name, self.config["mode"])
 
     def read(self) -> pw.Table:
         """Read data from API using the connector.
@@ -73,6 +74,7 @@ class APISource(BaseSource):
                 "setup() must be called before read()."
             )
 
+        LOGGER.info("Source '%s': building Pathway read graph", self.name)
         schema = self._get_schema()
 
         # Build Pathway computation graph using the connector

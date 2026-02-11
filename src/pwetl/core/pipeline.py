@@ -5,10 +5,11 @@ import pathway as pw
 from pwetl.sources.base import BaseSource
 from pwetl.sinks.base import BaseSink
 from pwetl.transforms.base import BaseTransform
+from pwetl.core.exceptions import SourceError, TransformError, SinkError
 from pwetl.utils.logger import get_logger
 
 
-LOGGER = get_logger()
+LOGGER = get_logger(__name__)
 
 
 class Pipeline:
@@ -52,24 +53,28 @@ class Pipeline:
             RuntimeError: When any stage fails
         """
         try:
+            LOGGER.info("Pipeline starting...")
+
             # Stage 1: Initialize
-            LOGGER.debug("Setup Pipeline workflow...")
             self._setup_all()
+            LOGGER.info("Pipeline setup complete")
 
             # Stage 2: Source - Read data
             tables = self._read_sources()
+            LOGGER.info("Sources read complete")
 
             # Stage 3: Transform - Process data
-            LOGGER.debug("  Processing with Transform module...")
             result_tables = self._transform(tables)
+            LOGGER.info("Transform complete")
 
             # Stage 4: Sink - Write data
             self._write_sinks(result_tables)
+            LOGGER.info("Sinks write scheduled")
 
             # Run Pathway
-            LOGGER.debug("Setup done, start pathway Pipeline...")
+            LOGGER.info("Running Pathway engine...")
             pw.run(monitoring_level=pw.MonitoringLevel.NONE)
-            LOGGER.debug("Completed execution.")
+            LOGGER.info("Pipeline completed")
 
         finally:
             LOGGER.debug("Cleaning up resources...")
@@ -81,21 +86,24 @@ class Pipeline:
         for name, source in self.sources.items():
             try:
                 source.setup()
+                LOGGER.info("  Source '%s' initialized", name)
             except Exception as e:
-                raise RuntimeError(f"Source '{name}' initialization failed: {e}") from e
+                raise SourceError(f"Source '{name}' initialization failed: {e}") from e
 
         # Initialize Transform
         try:
             self.transform.setup()
+            LOGGER.info("  Transform initialized")
         except Exception as e:
-            raise RuntimeError(f"Transform initialization failed: {e}") from e
+            raise TransformError(f"Transform initialization failed: {e}") from e
 
         # Initialize Sinks
         for name, sink in self.sinks.items():
             try:
                 sink.setup()
+                LOGGER.info("  Sink '%s' initialized", name)
             except Exception as e:
-                raise RuntimeError(f"Sink '{name}' initialization failed: {e}") from e
+                raise SinkError(f"Sink '{name}' initialization failed: {e}") from e
 
     def _read_sources(self) -> Dict[str, pw.Table]:
         """Read data from all Sources.
@@ -110,10 +118,10 @@ class Pipeline:
 
         for name, source in self.sources.items():
             try:
-                LOGGER.debug("  Read Source '%s'...", name)
                 tables[name] = source.read()
+                LOGGER.info("  Source '%s' read complete", name)
             except Exception as e:
-                raise RuntimeError(f"Source '{name}' read failed: {e}") from e
+                raise SourceError(f"Source '{name}' read failed: {e}") from e
 
         return tables
 
@@ -134,15 +142,16 @@ class Pipeline:
 
             # Validate return value
             if not isinstance(result_tables, dict):
-                raise TypeError(
-                    "Transform must return Dict[str, pw.Table], "
-                    f"but returned {type(result_tables)}"
+                raise TransformError(
+                    f"Transform must return Dict[str, pw.Table], but returned {type(result_tables)}"
                 )
 
             return result_tables
 
+        except TransformError:
+            raise
         except Exception as e:
-            raise RuntimeError(f"Transform processing failed: {e}") from e
+            raise TransformError(f"Transform processing failed: {e}") from e
 
     def _write_sinks(self, result_tables: Dict[str, pw.Table]) -> None:
         """Write to all Sinks.
@@ -156,17 +165,19 @@ class Pipeline:
         for name, sink in self.sinks.items():
             try:
                 if name not in result_tables:
-                    raise ValueError(
+                    raise TransformError(
                         f"Transform did not produce required table for Sink '{name}'.\n"
                         f"Available tables: {', '.join(result_tables.keys())}"
                     )
-                LOGGER.debug("  Write Sink '%s'...", name)
 
                 table = result_tables[name]
                 sink.write(table)
+                LOGGER.info("  Sink '%s' write scheduled", name)
 
+            except (TransformError, SinkError):
+                raise
             except Exception as e:
-                raise RuntimeError(f"Sink '{name}' write failed: {e}") from e
+                raise SinkError(f"Sink '{name}' write failed: {e}") from e
 
     def _teardown_all(self) -> None:
         """Clean up all components."""
@@ -175,17 +186,17 @@ class Pipeline:
             try:
                 source.teardown()
             except Exception as e:
-                LOGGER.debug("Source '%s' cleanup failed: %s", name, e)
+                LOGGER.warning("Source '%s' cleanup failed: %s", name, e)
 
         # Clean up Transform
         try:
             self.transform.teardown()
         except Exception as e:
-            LOGGER.debug("Transform cleanup failed: %s", e)
+            LOGGER.warning("Transform cleanup failed: %s", e)
 
         # Clean up Sinks
         for name, sink in self.sinks.items():
             try:
                 sink.teardown()
             except Exception as e:
-                LOGGER.debug("Sink '%s' cleanup failed: %s", name, e)
+                LOGGER.warning("Sink '%s' cleanup failed: %s", name, e)
