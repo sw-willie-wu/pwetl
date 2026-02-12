@@ -16,7 +16,7 @@ class DatabaseSource(BaseSource):
     Supports any SQLAlchemy-compatible database (MSSQL, PostgreSQL, MySQL, Sybase, etc.).
 
     Query source (pick one):
-    - query_file: path to a .sql file
+    - query_sql: path to a .sql file
     - table: table name (SELECT columns from schema keys, or SELECT * if no schema)
 
     Modes:
@@ -26,7 +26,7 @@ class DatabaseSource(BaseSource):
 
     required_config = ['dsn']
     optional_config = {
-        'query_file': None,
+        'query_sql': None,
         'table': None,
         'ssh_tunnel': None,
         'schema': None,
@@ -43,10 +43,18 @@ class DatabaseSource(BaseSource):
         self._tunnel = None
         self._connector = None
 
-        # Validate: query_file or table must be provided
-        if not self.config.get('query_file') and not self.config.get('table'):
+        # Backwards compatibility: query_file → query_sql
+        if self.config.get('query_file') and not self.config.get('query_sql'):
+            LOGGER.warning(
+                "Source '%s': 'query_file' is deprecated, use 'query_sql' instead",
+                self.name,
+            )
+            self.config['query_sql'] = self.config.pop('query_file')
+
+        # Validate: query_sql or table must be provided
+        if not self.config.get('query_sql') and not self.config.get('table'):
             raise ValueError(
-                f"Source '{self.name}' requires either 'query_file' or 'table' "
+                f"Source '{self.name}' requires either 'query_sql' or 'table' "
                 "in configuration."
             )
 
@@ -147,23 +155,23 @@ class DatabaseSource(BaseSource):
             return [dict(zip(columns, row)) for row in result.fetchall()]
 
     def _get_query(self) -> str:
-        """Get SQL query from query_file or table config.
+        """Get SQL query from query_sql or table config.
 
         Returns:
             SQL query string
 
         Raises:
-            ValueError: When query_file cannot be read
+            ValueError: When query_sql cannot be read
         """
-        # query_file takes precedence
-        query_file = self.config.get('query_file')
-        if query_file:
+        # query_sql takes precedence
+        query_sql = self.config.get('query_sql')
+        if query_sql:
             try:
-                with open(query_file, 'r', encoding='utf-8') as f:
+                with open(query_sql, 'r', encoding='utf-8') as f:
                     return f.read().strip()
             except FileNotFoundError as exc:
                 raise ValueError(
-                    f"Source '{self.name}': query_file '{query_file}' not found."
+                    f"Source '{self.name}': query_sql '{query_sql}' not found."
                 ) from exc
 
         # Build SELECT from table (+ schema keys if available)
