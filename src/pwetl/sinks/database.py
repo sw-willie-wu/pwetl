@@ -1,4 +1,4 @@
-"""Database data sink using SQLAlchemy DSN."""
+"""Database data sink using SQLAlchemy DSN with dialect strategy."""
 
 import json
 import os
@@ -7,26 +7,41 @@ from typing import Any, Dict
 
 import pathway as pw
 from pwetl.sinks.base import BaseSink
+from pwetl.sinks.dialect import get_dialect, parse_column_def
 from pwetl.utils.logger import get_logger
 
 LOGGER = get_logger(__name__)
 
 
 class DatabaseSink(BaseSink):
-    """Database output via SQLAlchemy DSN.
+    """Database output via SQLAlchemy DSN with dialect-based strategy.
 
     Supports any SQLAlchemy-compatible database (PostgreSQL, MySQL, MSSQL, etc.).
+    Dialect is auto-detected from DSN or manually specified.
+
+    Table creation:
+    - columns: simple CREATE TABLE (type + pk)
+    - init_sql: advanced DDL from SQL file (CREATE TABLE + INDEX + TRIGGER)
+    - columns and init_sql are mutually exclusive
+
+    Write modes:
+    - insert: bulk INSERT (default)
+    - upsert: INSERT ON CONFLICT DO UPDATE (dialect-specific)
 
     Uses a temp JSONL strategy:
     - write()    → pw.io.jsonlines.write(table, temp_path)
     - pw.run()   → Pathway engine writes data to temp JSONL
-    - teardown() → read JSONL → SQLAlchemy bulk INSERT → cleanup
+    - teardown() → read JSONL → dialect insert/upsert → cleanup
     """
 
     required_config = ['dsn', 'table']
     optional_config = {
+        'write_mode': 'insert',
+        'primary_key': None,
+        'columns': None,
+        'init_sql': None,
+        'dialect': None,
         'ssh_tunnel': None,
-        'if_not_exists': 'error',  # 'error' or 'create'
     }
 
     def __init__(self, name: str, config: Dict[str, Any]):
@@ -35,9 +50,51 @@ class DatabaseSink(BaseSink):
         self._engine = None
         self._tunnel = None
         self._temp_path = None
+        self._dialect = None
+
+    def _validate_config(self) -> None:
+        """Validate sink-specific configuration."""
+        super()._validate_config()
+
+        write_mode = self.config.get('write_mode', 'insert')
+        if write_mode not in ('insert', 'upsert'):
+            raise ValueError(
+                f"Sink '{self.name}': write_mode must be 'insert' or 'upsert', "
+                f"got '{write_mode}'"
+            )
+
+        if write_mode == 'upsert':
+            pk = self._resolve_primary_key()
+            if not pk:
+                raise ValueError(
+                    f"Sink '{self.name}': write_mode 'upsert' requires "
+                    "'primary_key' config or 'pk' modifier in columns"
+                )
+
+        columns = self.config.get('columns')
+        init_sql = self.config.get('init_sql')
+        if columns and init_sql:
+            raise ValueError(
+                f"Sink '{self.name}': 'columns' and 'init_sql' are mutually exclusive"
+            )
+
+    def _resolve_primary_key(self) -> list[str] | None:
+        """Resolve primary key from config or columns pk modifier."""
+        if self.config.get('primary_key'):
+            return self.config['primary_key']
+
+        columns = self.config.get('columns')
+        if columns:
+            pks = [
+                name for name, def_str in columns.items()
+                if 'pk' in [p.strip().lower() for p in def_str.split(',')[1:]]
+            ]
+            return pks or None
+
+        return None
 
     def setup(self) -> None:
-        """Initialize SSH tunnel (if configured) and SQLAlchemy engine."""
+        """Initialize SSH tunnel, engine, dialect, and table."""
         dsn = self.config['dsn']
 
         # Setup SSH tunnel if configured
@@ -55,51 +112,74 @@ class DatabaseSink(BaseSink):
 
         self._engine = create_engine(dsn)
 
-        # Check table existence
-        from sqlalchemy import inspect as sa_inspect
-        inspector = sa_inspect(self._engine)
+        # Detect dialect
+        dialect_name = (
+            self.config.get('dialect') or self._engine.dialect.name
+        )
+        dialect_cls = get_dialect(dialect_name)
         table_name = self.config['table']
-        if_not_exists = self.config.get('if_not_exists', 'error')
+        self._dialect = dialect_cls(self._engine, table_name)
+        LOGGER.info(
+            "Sink '%s': engine created (dialect: %s)",
+            self.name, dialect_name,
+        )
 
-        if not inspector.has_table(table_name):
-            if if_not_exists == 'create':
-                LOGGER.info(
-                    "Sink '%s': table '%s' does not exist, "
-                    "will be auto-created on first INSERT.",
-                    self.name, table_name,
-                )
-            else:
-                raise ValueError(
-                    f"Sink '{self.name}': table '{table_name}' does not exist. "
-                    f"Set if_not_exists: create to auto-create."
-                )
+        # Table creation
+        columns = self.config.get('columns')
+        init_sql = self.config.get('init_sql')
+
+        if columns:
+            self._dialect.ensure_table(columns)
+        elif init_sql:
+            self._run_init_sql()
+        elif not self._dialect.table_exists():
+            raise ValueError(
+                f"Sink '{self.name}': table '{table_name}' does not exist. "
+                "Provide 'columns' or 'init_sql' to create it."
+            )
+
+    def _run_init_sql(self) -> None:
+        """Execute init SQL file for table setup."""
+        from sqlalchemy import text
+
+        sql_path = self.config['init_sql']
+        try:
+            with open(sql_path, 'r', encoding='utf-8') as f:
+                sql = f.read()
+        except FileNotFoundError as exc:
+            raise ValueError(
+                f"Sink '{self.name}': init_sql '{sql_path}' not found."
+            ) from exc
+
+        with self._engine.begin() as conn:
+            conn.execute(text(sql))
+
+        LOGGER.info(
+            "Sink '%s': executed init SQL from '%s'", self.name, sql_path
+        )
 
     def write(self, table: pw.Table) -> None:
-        """Schedule Pathway output to a temporary JSONL file.
-
-        Args:
-            table: Pathway Table to write
-        """
+        """Schedule Pathway output to a temporary JSONL file."""
         fd, temp_path = tempfile.mkstemp(suffix='.jsonl', text=True)
         os.close(fd)
 
         try:
             pw.io.jsonlines.write(table, temp_path)
             self._temp_path = temp_path
+            LOGGER.info("Sink '%s': scheduled output to temp JSONL", self.name)
         except Exception:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
             raise
 
     def teardown(self) -> None:
-        """Read temp JSONL, bulk INSERT via SQLAlchemy, then cleanup."""
+        """Read temp JSONL, execute write via dialect, then cleanup."""
         try:
-            self._insert_from_temp()
+            self._execute_write()
         finally:
             # Cleanup temp file
             if self._temp_path and os.path.exists(self._temp_path):
                 os.remove(self._temp_path)
-                LOGGER.info("Sink '%s': cleaned up temp file.", self.name)
 
             # Dispose engine
             if self._engine is not None:
@@ -111,72 +191,70 @@ class DatabaseSink(BaseSink):
                 self._tunnel.stop()
                 self._tunnel = None
 
-    def _insert_from_temp(self) -> None:
-        """Read temp JSONL and bulk INSERT into the database."""
+    def _read_and_clean_records(self) -> list[dict]:
+        """Read temp JSONL and clean records.
+
+        1. Read all lines from temp JSONL
+        2. Filter: only diff == 1 (Pathway INSERT)
+        3. Remove Pathway metadata (diff, time)
+        4. Restore _pw_ prefixed columns
+        """
         if not self._temp_path or not os.path.exists(self._temp_path):
-            LOGGER.warning("Sink '%s': no temp file to read.", self.name)
-            return
+            return []
 
-        if self._engine is None:
-            LOGGER.warning("Sink '%s': no engine available.", self.name)
-            return
-
-        # Read JSONL records
         records = []
         with open(self._temp_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
-                if line:
-                    records.append(json.loads(line))
+                if not line:
+                    continue
+                record = json.loads(line)
 
-        LOGGER.info(
-            "Sink '%s': read %d records from temp file.",
-            self.name, len(records),
-        )
+                # Only keep diff == 1 (INSERT)
+                diff = record.pop('diff', 1)
+                record.pop('time', None)
 
-        # Filter: only diff == 1 (Pathway INSERT)
-        insert_records = [r for r in records if r.get('diff') == 1]
+                # Restore columns prefixed with _pw_ (Pathway collision avoidance)
+                for key in list(record.keys()):
+                    if key.startswith('_pw_'):
+                        record[key[4:]] = record.pop(key)
 
-        # Remove Pathway metadata columns
-        cleaned = []
-        for record in insert_records:
-            row = {k: v for k, v in record.items() if k not in ('diff', 'time')}
-            cleaned.append(row)
+                if diff == 1:
+                    records.append(record)
 
-        if not cleaned:
-            LOGGER.info("Sink '%s': no records to insert.", self.name)
+        return records
+
+    def _execute_write(self) -> None:
+        """Read cleaned records and write via dialect."""
+        if self._engine is None:
+            LOGGER.warning("Sink '%s': no engine available", self.name)
             return
 
-        LOGGER.info(
-            "Sink '%s': inserting %d records into '%s'.",
-            self.name, len(cleaned), self.config['table'],
-        )
+        records = self._read_and_clean_records()
 
-        # Bulk INSERT
-        from sqlalchemy import text
+        if not records:
+            LOGGER.info("Sink '%s': no records to write", self.name)
+            return
 
+        write_mode = self.config.get('write_mode', 'insert')
         table_name = self.config['table']
-        columns = list(cleaned[0].keys())
-        col_str = ', '.join(columns)
-        param_str = ', '.join(f':{c}' for c in columns)
-        insert_sql = text(f"INSERT INTO {table_name} ({col_str}) VALUES ({param_str})")
 
-        with self._engine.connect() as conn:
-            conn.execute(insert_sql, cleaned)
-            conn.commit()
-
-        LOGGER.info("Sink '%s': INSERT complete.", self.name)
+        if write_mode == 'upsert':
+            pk = self._resolve_primary_key()
+            count = self._dialect.upsert(records, pk)
+            LOGGER.info(
+                "Sink '%s': upserted %d records into '%s'",
+                self.name, count, table_name,
+            )
+        else:
+            count = self._dialect.insert(records)
+            LOGGER.info(
+                "Sink '%s': inserted %d records into '%s'",
+                self.name, count, table_name,
+            )
 
     def _setup_ssh_tunnel(self, dsn: str, ssh_config: Dict[str, Any]) -> str:
-        """Setup SSH tunnel and rewrite DSN to use local tunnel port.
-
-        Args:
-            dsn: Original DSN with real DB host/port
-            ssh_config: SSH tunnel configuration
-
-        Returns:
-            Rewritten DSN pointing to localhost:local_port
-        """
+        """Setup SSH tunnel and rewrite DSN to use local tunnel port."""
         try:
             from sshtunnel import SSHTunnelForwarder
         except ImportError as exc:
