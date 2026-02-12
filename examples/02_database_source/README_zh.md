@@ -40,7 +40,7 @@ pwetl --config config_static.yaml
 pwetl --config config_streaming.yaml
 
 # 自訂 SQL 查詢檔
-pwetl --config config_query_file.yaml
+pwetl --config config_query_sql.yaml
 ```
 
 ### 4. 檢查結果
@@ -83,14 +83,14 @@ sources:
       - hire_date
 ```
 
-### config_query_file.yaml — 自訂 SQL
+### config_query_sql.yaml — 自訂 SQL
 
 ```yaml
 sources:
   - name: employees
     type: database
     dsn: postgresql://pwetl:pwetl_pass@localhost:5435/pwetl_demo
-    query_file: query.sql
+    query_sql: query.sql
 ```
 
 ## Pipeline 流程
@@ -111,7 +111,7 @@ PostgreSQL (employees) --> DepartmentSummaryTransform --> department_summary.csv
 | `transform.py` | 按部門聚合 |
 | `config_static.yaml` | Static 模式（執行一次） |
 | `config_streaming.yaml` | Streaming 模式（每 60 秒輪詢） |
-| `config_query_file.yaml` | 自訂 SQL 查詢檔 |
+| `config_query_sql.yaml` | 自訂 SQL 查詢檔 |
 | `.env.example` | 環境變數範本 |
 
 ## 使用其他資料庫

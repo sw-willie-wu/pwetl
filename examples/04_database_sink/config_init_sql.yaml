@@ -1,13 +1,16 @@
-# Database Sink - Streaming 模式
-# 持續監聽 sales_data.csv 所在目錄，有變更時自動寫入資料庫
-# 搭配 columns 自動建表
+# Database Sink - init_sql 模式
+# 透過 init_sql 執行自訂 DDL（CREATE TABLE + INDEX 等）
+# 適合需要進階 DDL 控制的場景（columns 無法滿足時）
+#
+# 注意：init.sql 是給 Docker entrypoint 用的
+#       sink_init.sql 才是給 pwetl init_sql 用的（建不同的 table + index）
 
 sources:
   - name: sales
     type: file
     path: sales_data.csv
     format: csv
-    mode: streaming
+    mode: static
     schema:
       order_id: int
       product_id: str
@@ -23,12 +26,8 @@ sinks:
   - name: db_output
     type: database
     dsn: postgresql://${DB_USER:pwetl}:${DB_PASSWORD:pwetl_pass}@${DB_HOST:localhost}:${DB_PORT:5436}/${DB_NAME:pwetl_demo}
-    table: sales_summary_v2
-    columns:
-      category: text, pk
-      total_quantity: bigint
-      total_revenue: float
-      order_count: bigint
+    table: sales_summary_v3
+    init_sql: sink_init.sql       # 執行自訂 DDL（CREATE TABLE + INDEX）
 
   - name: output_csv
     type: file
