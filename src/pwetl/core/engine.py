@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Union
 
 from pwetl.core.config import ConfigLoader
+from pwetl.core.exceptions import ConfigurationError
 from pwetl.core.pipeline import Pipeline
 from pwetl.core.registry import SinkFactory, SourceFactory
 from pwetl.utils.env import load_env_file
@@ -123,50 +124,59 @@ class ETLEngine:
         """Load configuration.
 
         Raises:
-            Exception: When configuration loading fails
+            ConfigurationError: When configuration loading fails
         """
-        try:
-            self.config = ConfigLoader.load(self.config_path)
-        except Exception as e:
-            raise RuntimeError(f"Configuration loading failed: {e}") from e
+        self.config = ConfigLoader.load(self.config_path)
 
     def _build_pipeline(self) -> None:
         """Build Pipeline.
 
         Raises:
-            RuntimeError: When Pipeline building fails
+            ConfigurationError: When Source/Sink/Transform config is invalid
+            RuntimeError: When Pipeline building fails for other reasons
         """
-        try:
-            if self.config is None:
-                raise RuntimeError("Configuration not loaded, cannot build Pipeline.")
+        if self.config is None:
+            raise RuntimeError("Configuration not loaded, cannot build Pipeline.")
 
-            # Build Sources
-            sources = {}
-            for source_config in self.config["sources"]:
-                name = source_config["name"]
+        # Build Sources
+        sources = {}
+        for source_config in self.config["sources"]:
+            name = source_config["name"]
+            try:
                 sources[name] = SourceFactory.create(name, source_config)
-            LOGGER.debug(
-                "  Find %d Sources: %s", len(sources), ", ".join(sources.keys())
-            )
-            # Load Transform
+            except Exception as e:
+                raise ConfigurationError(
+                    f"Source '{name}' configuration error: {e}"
+                ) from e
+        LOGGER.debug(
+            "  Find %d Sources: %s", len(sources), ", ".join(sources.keys())
+        )
+
+        # Load Transform
+        try:
             transform = TransformLoader.load(self.config["transform"])
-            LOGGER.debug("  Find Transform module: %s", self.config["transform"])
-
-            # Build Sinks
-            sinks = {}
-            for sink_config in self.config["sinks"]:
-                name = sink_config["name"]
-                sinks[name] = SinkFactory.create(name, sink_config)
-            LOGGER.debug("  Find %d Sinks: %s", len(sinks), ", ".join(sinks.keys()))
-
-            # Create Pipeline
-            self.pipeline = Pipeline(
-                sources=sources,
-                transform=transform,
-                sinks=sinks,
-                verbose=self.verbose,
-            )
-            # LOGGER.debug("Start build Pipeline flow...")
-
         except Exception as e:
-            raise RuntimeError(f"Build Pipeline failed: {e}") from e
+            raise ConfigurationError(
+                f"Transform configuration error: {e}"
+            ) from e
+        LOGGER.debug("  Find Transform module: %s", self.config["transform"])
+
+        # Build Sinks
+        sinks = {}
+        for sink_config in self.config["sinks"]:
+            name = sink_config["name"]
+            try:
+                sinks[name] = SinkFactory.create(name, sink_config)
+            except Exception as e:
+                raise ConfigurationError(
+                    f"Sink '{name}' configuration error: {e}"
+                ) from e
+        LOGGER.debug("  Find %d Sinks: %s", len(sinks), ", ".join(sinks.keys()))
+
+        # Create Pipeline
+        self.pipeline = Pipeline(
+            sources=sources,
+            transform=transform,
+            sinks=sinks,
+            verbose=self.verbose,
+        )
