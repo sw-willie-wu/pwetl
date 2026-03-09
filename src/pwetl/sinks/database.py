@@ -6,11 +6,41 @@ import tempfile
 from typing import Any, Dict
 
 import pathway as pw
+from pwetl.core.exceptions import SinkError
 from pwetl.sinks.base import BaseSink
 from pwetl.sinks.dialect import get_dialect, parse_column_def
 from pwetl.utils.logger import get_logger
 
 LOGGER = get_logger(__name__)
+
+# Internal keys for tracking Pathway metadata in duplicate-key JSONL
+_PW_META_DIFF_KEY = '__pw_meta_diff__'
+_PW_COLLISIONS_KEY = '__pw_collisions__'
+
+
+def _handle_pathway_pairs(pairs):
+    """Parse Pathway JSONL handling duplicate metadata keys.
+
+    Pathway appends ``diff`` and ``time`` metadata at the end of each record.
+    When user columns have the same name, the JSONL contains duplicate JSON
+    keys.  First occurrence = user data, later = Pathway metadata.
+
+    Used as ``object_pairs_hook`` for ``json.loads``.
+    """
+    result = {}
+    collisions = set()
+    for key, value in pairs:
+        if key in result:
+            collisions.add(key)
+            if key == 'diff':
+                # Store metadata diff for filtering (need its int value)
+                result[_PW_META_DIFF_KEY] = value
+            # For 'time' and other duplicates: discard metadata copy
+        else:
+            result[key] = value
+    if collisions:
+        result[_PW_COLLISIONS_KEY] = collisions
+    return result
 
 
 class DatabaseSink(BaseSink):
@@ -194,10 +224,15 @@ class DatabaseSink(BaseSink):
     def _read_and_clean_records(self) -> list[dict]:
         """Read temp JSONL and clean records.
 
-        1. Read all lines from temp JSONL
-        2. Filter: only diff == 1 (Pathway INSERT)
-        3. Remove Pathway metadata (diff, time)
-        4. Restore _pw_ prefixed columns
+        Pathway JSONL contains duplicate keys when user columns collide with
+        metadata (``diff``, ``time``).  We use ``object_pairs_hook`` to keep
+        the user's value (first occurrence) and separate the metadata copy.
+
+        Steps:
+        1. Parse each line with ``_handle_pathway_pairs``
+        2. Extract Pathway ``diff`` metadata for filtering (keep only diff==1)
+        3. Remove Pathway ``time`` metadata (keep user's ``time`` if present)
+        4. Restore any ``_pw_`` prefixed columns (fallback)
         """
         if not self._temp_path or not os.path.exists(self._temp_path):
             return []
@@ -208,13 +243,24 @@ class DatabaseSink(BaseSink):
                 line = line.strip()
                 if not line:
                     continue
-                record = json.loads(line)
+                record = json.loads(
+                    line, object_pairs_hook=_handle_pathway_pairs,
+                )
 
-                # Only keep diff == 1 (INSERT)
-                diff = record.pop('diff', 1)
-                record.pop('time', None)
+                collisions = record.pop(_PW_COLLISIONS_KEY, set())
 
-                # Restore columns prefixed with _pw_ (Pathway collision avoidance)
+                # Extract Pathway metadata diff
+                if _PW_META_DIFF_KEY in record:
+                    # User has a 'diff' column — metadata stored separately
+                    diff = record.pop(_PW_META_DIFF_KEY)
+                else:
+                    diff = record.pop('diff', 1)
+
+                # Remove Pathway metadata time (only when no user collision)
+                if 'time' not in collisions:
+                    record.pop('time', None)
+
+                # Restore _pw_ prefixed columns (fallback for other collisions)
                 for key in list(record.keys()):
                     if key.startswith('_pw_'):
                         record[key[4:]] = record.pop(key)
@@ -227,8 +273,9 @@ class DatabaseSink(BaseSink):
     def _execute_write(self) -> None:
         """Read cleaned records and write via dialect."""
         if self._engine is None:
-            LOGGER.warning("Sink '%s': no engine available", self.name)
-            return
+            raise SinkError(
+                f"Sink '{self.name}': no engine available, cannot write"
+            )
 
         records = self._read_and_clean_records()
 
