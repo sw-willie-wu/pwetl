@@ -79,7 +79,7 @@ class APIConnectorSubject(HashDiffConnectorMixin, pw.io.python.ConnectorSubject)
                 time.sleep(self.refresh_interval)
 
             except Exception as e:
-                LOGGER.error("API request failed: %s", e)
+                LOGGER.warning("API request failed: %s", e)
                 if self.mode == "static":
                     raise
                 # Streaming mode: continue retrying

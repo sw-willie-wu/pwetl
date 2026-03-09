@@ -4,6 +4,7 @@ import time
 from typing import Any, Dict, List
 import requests
 import pathway as pw
+from pwetl.core.exceptions import SinkError
 from pwetl.sinks.base import BaseSink
 from pwetl.utils.logger import get_logger
 
@@ -78,8 +79,9 @@ class APISink(BaseSink):
         import os
 
         if not hasattr(self, "_temp_path") or self._temp_path is None:
-            LOGGER.warning("Sink '%s': no temp_path attribute", self.name)
-            return
+            raise SinkError(
+                f"Sink '{self.name}': no temp_path, write() may not have been called"
+            )
 
         temp_path: str = self._temp_path
         LOGGER.info("Sink '%s': starting teardown with temp file %s", self.name, temp_path)
@@ -87,8 +89,9 @@ class APISink(BaseSink):
         try:
             # Check if temporary file exists
             if not os.path.exists(temp_path):
-                LOGGER.warning("Sink '%s': temp file does not exist", self.name)
-                return
+                raise SinkError(
+                    f"Sink '{self.name}': temp file '{temp_path}' does not exist"
+                )
 
             # Read data
             data = []
@@ -108,7 +111,7 @@ class APISink(BaseSink):
                 )
                 self._send_to_api(data)
             else:
-                LOGGER.warning("Sink '%s': no data to send", self.name)
+                LOGGER.info("Sink '%s': no data to send", self.name)
 
         finally:
             # Clean up temporary file
@@ -209,6 +212,6 @@ class APISink(BaseSink):
                     time.sleep(retry_delay)
                     continue
                 # Retries exhausted
-                raise RuntimeError(
-                    f"API request failed (retried {max_retry} times): {e}"
+                raise SinkError(
+                    f"Sink '{self.name}': API request failed (retried {max_retry} times): {e}"
                 ) from e

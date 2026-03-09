@@ -83,7 +83,11 @@ sinks:
 
 ### config_streaming.yaml
 
-持續監聽 `sales_data.csv`，有變更時寫入 `sales_summary_v2`，搭配 `if_not_exists: create` — 資料表不需要事先存在。
+持續監聽 `sales_data.csv`，有變更時寫入 `sales_summary_v2`，搭配 `columns` 自動建表 — 資料表不需要事先存在。
+
+### config_init_sql.yaml
+
+使用 `init_sql: sink_init.sql` 執行自訂 DDL（CREATE TABLE + INDEX + TRIGGER）。適合需要進階 DDL 控制的場景（`columns` 無法表達的）。
 
 ## Pipeline 流程
 
@@ -99,11 +103,13 @@ sales_data.csv --> SalesTransform --> PostgreSQL (sales_summary)
 | 檔案 | 說明 |
 |------|------|
 | `docker-compose.yaml` | PostgreSQL 16 容器 |
-| `init.sql` | 建立 `sales_summary` 資料表 |
+| `init.sql` | 建立 `sales_summary` 資料表（Docker entrypoint） |
+| `sink_init.sql` | 建立 `sales_summary_v3` 資料表 + index（pwetl `init_sql`） |
 | `sales_data.csv` | 15 筆範例銷售訂單 |
 | `transform.py` | 按產品聚合訂單 |
 | `config_static.yaml` | Static 模式（資料表需存在） |
-| `config_streaming.yaml` | Streaming 模式（自動建表） |
+| `config_streaming.yaml` | Streaming 模式（透過 `columns` 自動建表） |
+| `config_init_sql.yaml` | Static 模式（透過 `init_sql` 自動建表） |
 | `.env.example` | 環境變數範本 |
 
 ## 使用其他資料庫

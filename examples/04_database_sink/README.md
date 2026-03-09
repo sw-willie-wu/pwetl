@@ -83,7 +83,11 @@ sinks:
 
 ### config_streaming.yaml
 
-Watches `sales_data.csv` for changes. Writes to `sales_summary_v2` with `if_not_exists: create` — the table does not need to exist beforehand.
+Watches `sales_data.csv` for changes. Writes to `sales_summary_v2` with `columns` — the table is auto-created if it doesn't exist.
+
+### config_init_sql.yaml
+
+Uses `init_sql: sink_init.sql` to execute custom DDL (CREATE TABLE + INDEX + TRIGGER) before writing. Useful when you need advanced DDL control that `columns` can't express.
 
 ## Pipeline Flow
 
@@ -99,11 +103,13 @@ sales_data.csv --> SalesTransform --> PostgreSQL (sales_summary)
 | File | Description |
 |------|-------------|
 | `docker-compose.yaml` | PostgreSQL 16 container |
-| `init.sql` | Creates `sales_summary` table |
+| `init.sql` | Creates `sales_summary` table (Docker entrypoint) |
+| `sink_init.sql` | Creates `sales_summary_v3` table + index (pwetl `init_sql`) |
 | `sales_data.csv` | 15 sample sales orders |
 | `transform.py` | Aggregates orders by product |
 | `config_static.yaml` | Static mode (table must exist) |
-| `config_streaming.yaml` | Streaming mode (auto-create table) |
+| `config_streaming.yaml` | Streaming mode (auto-create table via `columns`) |
+| `config_init_sql.yaml` | Static mode (auto-create table via `init_sql`) |
 | `.env.example` | Environment variable template |
 
 ## Using Other Databases

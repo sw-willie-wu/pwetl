@@ -18,23 +18,23 @@ class TestDatabaseSourceConfig:
         with pytest.raises(ValueError, match="dsn"):
             DatabaseSource('test', {'table': 'my_table'})
 
-    def test_missing_query_file_and_table_raises(self):
-        """Test that missing both query_file and table raises ValueError."""
+    def test_missing_query_sql_and_table_raises(self):
+        """Test that missing both query_sql and table raises ValueError."""
         from pwetl.sources.database import DatabaseSource
 
-        with pytest.raises(ValueError, match="query_file.*table"):
+        with pytest.raises(ValueError, match="query_sql.*table"):
             DatabaseSource('test', {'dsn': 'sqlite://'})
 
-    def test_query_file_config(self):
-        """Test valid config with query_file."""
+    def test_query_sql_config(self):
+        """Test valid config with query_sql."""
         from pwetl.sources.database import DatabaseSource
 
         source = DatabaseSource('test', {
             'dsn': 'sqlite://',
-            'query_file': 'query.sql',
+            'query_sql': 'query.sql',
         })
         assert source.config['dsn'] == 'sqlite://'
-        assert source.config['query_file'] == 'query.sql'
+        assert source.config['query_sql'] == 'query.sql'
 
     def test_table_config(self):
         """Test valid config with table."""
@@ -59,6 +59,35 @@ class TestDatabaseSourceConfig:
         assert source.config['validation_mode'] == 'sample'
         assert source.config['ssh_tunnel'] is None
         assert source.config['schema'] is None
+
+    def test_query_file_backwards_compat(self, caplog):
+        """Test that query_file is accepted with deprecation warning."""
+        import logging
+        from pwetl.sources.database import DatabaseSource
+
+        with caplog.at_level(logging.WARNING):
+            source = DatabaseSource('test', {
+                'dsn': 'sqlite://',
+                'query_file': 'legacy.sql',
+            })
+
+        # query_file should be migrated to query_sql
+        assert source.config['query_sql'] == 'legacy.sql'
+        assert 'query_file' not in source.config
+        # Should have logged a deprecation warning
+        assert any('deprecated' in r.message.lower() for r in caplog.records)
+
+    def test_query_file_does_not_override_query_sql(self):
+        """Test that query_file does not override existing query_sql."""
+        from pwetl.sources.database import DatabaseSource
+
+        source = DatabaseSource('test', {
+            'dsn': 'sqlite://',
+            'query_sql': 'new.sql',
+            'query_file': 'legacy.sql',
+        })
+        # query_sql takes precedence, query_file is ignored
+        assert source.config['query_sql'] == 'new.sql'
 
 
 class TestDatabaseSourceRegistry:
@@ -97,23 +126,23 @@ class TestDatabaseSourceGetQuery:
 
         source = DatabaseSource('test', {
             'dsn': 'sqlite://',
-            'query_file': str(sql_file),
+            'query_sql': str(sql_file),
         })
         assert source._get_query() == 'SELECT id, name FROM users WHERE active = 1'
 
-    def test_query_file_not_found(self):
-        """Test that missing query_file raises ValueError."""
+    def test_query_sql_not_found(self):
+        """Test that missing query_sql raises ValueError."""
         from pwetl.sources.database import DatabaseSource
 
         source = DatabaseSource('test', {
             'dsn': 'sqlite://',
-            'query_file': '/nonexistent/query.sql',
+            'query_sql': '/nonexistent/query.sql',
         })
         with pytest.raises(ValueError, match="not found"):
             source._get_query()
 
-    def test_query_file_precedence_over_table(self, tmp_path):
-        """Test that query_file takes precedence over table."""
+    def test_query_sql_precedence_over_table(self, tmp_path):
+        """Test that query_sql takes precedence over table."""
         from pwetl.sources.database import DatabaseSource
 
         sql_file = tmp_path / 'test.sql'
@@ -121,7 +150,7 @@ class TestDatabaseSourceGetQuery:
 
         source = DatabaseSource('test', {
             'dsn': 'sqlite://',
-            'query_file': str(sql_file),
+            'query_sql': str(sql_file),
             'table': 'ignored_table',
         })
         assert source._get_query() == 'SELECT custom FROM custom_query'

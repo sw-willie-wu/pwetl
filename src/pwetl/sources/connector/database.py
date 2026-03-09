@@ -53,7 +53,7 @@ class DatabaseConnectorSubject(HashDiffConnectorMixin, pw.io.python.ConnectorSub
                 time.sleep(self._refresh_interval)
 
             except Exception as e:
-                LOGGER.error("Database query failed: %s", e)
+                LOGGER.warning("Database query failed: %s", e)
                 if self._mode == "static":
                     raise
                 LOGGER.debug(

@@ -2,9 +2,29 @@
 
 All notable changes to pwetl will be documented in this file.
 
-## [Unreleased] - 2026-02-11
+## [Unreleased] - 2026-02-12
+
+### Added
+
+- **DatabaseSink Dialect 策略模式**：
+  - 新增 `sinks/dialect/` 子模組：`BaseDialect`（抽象介面）、`DefaultDialect`（raw SQL）、`PostgresDialect`（ON CONFLICT upsert）
+  - Dialect 從 DSN 自動偵測（`engine.dialect.name`），也可透過 `dialect` config 覆寫
+  - 新增 `write_mode` config：`insert`（預設）或 `upsert`（dialect-specific）
+  - 新增 `columns` config：簡單建表（`<type>[?] [, pk]` 語法，如 `uuid, pk`、`float?`、`varchar(100)`）
+  - 新增 `init_sql` config：進階 DDL 從 SQL 檔案執行（與 `columns` 互斥）
+  - 新增 `primary_key` config：upsert 所需的 PK 欄位列表（也可從 columns 的 `pk` modifier 提取）
+  - Pathway JSONL duplicate key 處理：使用 `object_pairs_hook` 正確分離使用者欄位與 Pathway metadata（`diff`、`time`），解決使用者定義 `time` 欄位被覆蓋的問題
 
 ### Changed
+
+- **DatabaseSink 重構**：
+  - 移除 `if_not_exists` config（改為 `columns` 或 `init_sql` 觸發建表）
+  - INSERT 邏輯從 DatabaseSink 搬到 dialect 層
+  - 透過 dialect strategy 自動處理 DB 專屬 SQL（PostgreSQL 用 `ON CONFLICT DO UPDATE`，其他用 `DELETE + INSERT` fallback）
+
+- **`query_file` → `query_sql` 重命名**：
+  - DatabaseSource 的 SQL 檔案 config 統一命名風格
+  - 向後相容：仍接受 `query_file`，但會發出 deprecation warning
 
 - **統一 Logging 與例外處理**：
   - 所有檔案頂層宣告 `LOGGER = get_logger(__name__)`，不在方法內 inline 建立
@@ -13,6 +33,8 @@ All notable changes to pwetl will be documented in this file.
   - `pipeline.py`：新增 INFO log 標記關鍵進度點（starting → setup → read → transform → write → engine run → completed）
   - `pipeline.py`：teardown 清理失敗從 DEBUG 提升為 WARNING
   - `engine.py`：移除 `execute()` 中重複的 `LOGGER.error()`，避免同一錯誤輸出兩次
+  - `engine.py`：`_build_pipeline()` Source/Sink/Transform 建立失敗改拋 `ConfigurationError`（原本包成 `RuntimeError`，CLI 無法分類顯示）
+  - `engine.py`：`_load_config()` 移除多餘的 `RuntimeError` 包裝，`ConfigLoader` 已直接拋 `ConfigurationError`
   - `cli.py`：依例外類別輸出不同前綴（`[Source]`、`[Transform]`、`[Sink]`、`[Config]`）
   - `sources/base.py`：`warnings.warn()` 全部改用 `LOGGER.warning()`，移除 `import warnings`
   - `sources/file.py`、`sinks/file.py`：新增頂層 LOGGER 及 INFO log
@@ -20,6 +42,14 @@ All notable changes to pwetl will be documented in this file.
   - `sinks/api.py`：移除 `teardown()` 內的 inline logger，統一用頂層 LOGGER；格式從 `"APISink %s:"` 改為 `"Sink '%s':"`；`_send_batch` retry 加 WARNING
   - `connector/api.py`：移除多餘的 `fetch api` log，streaming 等待/重試從 INFO 降為 DEBUG
   - `connector/database.py`：streaming 等待/重試從 INFO 降為 DEBUG
+
+### Examples
+
+- **Example 04 (Database Sink) 改進**：
+  - Transform 新增 UUID5 `id` 欄位（`pw.apply(uuid.uuid5)` + `_pw_id` prefix trick）
+  - Transform 新增 `dt.strptime()` 解析 `order_date` 為 `DateTimeNaive`，寫入 DB 為 `TIMESTAMPTZ`
+  - `init.sql`、`sink_init.sql`：`id` 改為 `UUID`，`time` 改為 `TIMESTAMPTZ`
+  - `config_streaming.yaml` columns：`id: uuid, pk`、`time: timestamptz`
 
 ### Documentation
 

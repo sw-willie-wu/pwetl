@@ -52,6 +52,7 @@ class Pipeline:
         Raises:
             RuntimeError: When any stage fails
         """
+        main_error = None
         try:
             LOGGER.info("Pipeline starting...")
 
@@ -76,9 +77,20 @@ class Pipeline:
             pw.run(monitoring_level=pw.MonitoringLevel.NONE)
             LOGGER.info("Pipeline completed")
 
-        finally:
-            LOGGER.debug("Cleaning up resources...")
-            self._teardown_all()
+        except Exception as e:
+            main_error = e
+
+        # Always run teardown — all components get a chance to clean up
+        LOGGER.debug("Cleaning up resources...")
+        teardown_error = self._teardown_all()
+
+        # Raise: main flow error takes priority over teardown error
+        if main_error is not None:
+            if teardown_error is not None:
+                LOGGER.warning("Teardown also failed: %s", teardown_error)
+            raise main_error
+        if teardown_error is not None:
+            raise teardown_error
 
     def _setup_all(self) -> None:
         """Initialize all components."""
@@ -179,24 +191,47 @@ class Pipeline:
             except Exception as e:
                 raise SinkError(f"Sink '{name}' write failed: {e}") from e
 
-    def _teardown_all(self) -> None:
-        """Clean up all components."""
+    def _teardown_all(self) -> SourceError | TransformError | SinkError | None:
+        """Clean up all components.
+
+        All components are cleaned up even if some fail.
+        Returns the first error (wrapped in the appropriate type) or None.
+        """
+        first_error = None
+
         # Clean up Sources
         for name, source in self.sources.items():
             try:
                 source.teardown()
             except Exception as e:
-                LOGGER.warning("Source '%s' cleanup failed: %s", name, e)
+                LOGGER.warning("Source '%s' teardown failed: %s", name, e)
+                if first_error is None:
+                    first_error = (
+                        e if isinstance(e, SourceError)
+                        else SourceError(f"Source '{name}' teardown failed: {e}")
+                    )
 
         # Clean up Transform
         try:
             self.transform.teardown()
         except Exception as e:
-            LOGGER.warning("Transform cleanup failed: %s", e)
+            LOGGER.warning("Transform teardown failed: %s", e)
+            if first_error is None:
+                first_error = (
+                    e if isinstance(e, TransformError)
+                    else TransformError(f"Transform teardown failed: {e}")
+                )
 
         # Clean up Sinks
         for name, sink in self.sinks.items():
             try:
                 sink.teardown()
             except Exception as e:
-                LOGGER.warning("Sink '%s' cleanup failed: %s", name, e)
+                LOGGER.warning("Sink '%s' teardown failed: %s", name, e)
+                if first_error is None:
+                    first_error = (
+                        e if isinstance(e, SinkError)
+                        else SinkError(f"Sink '{name}' teardown failed: {e}")
+                    )
+
+        return first_error

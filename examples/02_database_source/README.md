@@ -40,7 +40,7 @@ pwetl --config config_static.yaml
 pwetl --config config_streaming.yaml
 
 # Custom SQL query file
-pwetl --config config_query_file.yaml
+pwetl --config config_query_sql.yaml
 ```
 
 ### 4. Check Output
@@ -83,14 +83,14 @@ sources:
       - hire_date
 ```
 
-### config_query_file.yaml — Custom SQL
+### config_query_sql.yaml — Custom SQL
 
 ```yaml
 sources:
   - name: employees
     type: database
     dsn: postgresql://pwetl:pwetl_pass@localhost:5435/pwetl_demo
-    query_file: query.sql
+    query_sql: query.sql
 ```
 
 ## Pipeline Flow
@@ -111,7 +111,7 @@ PostgreSQL (employees) --> DepartmentSummaryTransform --> department_summary.csv
 | `transform.py` | Aggregates by department |
 | `config_static.yaml` | Static mode (run once) |
 | `config_streaming.yaml` | Streaming mode (poll every 60s) |
-| `config_query_file.yaml` | Custom SQL query file |
+| `config_query_sql.yaml` | Custom SQL query file |
 | `.env.example` | Environment variable template |
 
 ## Using Other Databases
