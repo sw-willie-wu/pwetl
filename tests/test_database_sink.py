@@ -240,6 +240,7 @@ class TestDatabaseSinkSetupTeardown:
         })
         mock_tunnel = MagicMock()
         sink._tunnel = mock_tunnel
+        sink._engine = MagicMock()
         sink._dialect = MagicMock()
 
         sink.teardown()
@@ -481,6 +482,92 @@ class TestDatabaseSinkWrite:
         args = mock_dialect.upsert.call_args[0]
         assert args[0] == [{'id': 1, 'name': 'Alice'}]
         assert args[1] == ['id']
+
+    def test_teardown_preserves_user_time_column(self, tmp_path):
+        """Test that user's 'time' column is preserved when it collides with
+        Pathway metadata.  Pathway JSONL outputs duplicate keys; the first is
+        the user's value, the second is metadata."""
+        from pwetl.sinks.database import DatabaseSink
+
+        sink = DatabaseSink('test', {
+            'dsn': 'sqlite://',
+            'table': 'output_table',
+        })
+
+        # Simulate Pathway JSONL with duplicate 'time' keys
+        temp_file = tmp_path / 'output.jsonl'
+        with open(temp_file, 'w') as f:
+            # Raw JSON with duplicate keys (as Pathway writes it)
+            f.write('{"id":1,"name":"Alice","time":"2026-01-19","diff":1,"time":0}\n')
+            f.write('{"id":2,"name":"Bob","time":"2026-01-20","diff":1,"time":0}\n')
+
+        sink._temp_path = str(temp_file)
+        sink._engine = MagicMock()
+        mock_dialect = MagicMock()
+        mock_dialect.insert.return_value = 2
+        sink._dialect = mock_dialect
+
+        sink.teardown()
+
+        inserted = mock_dialect.insert.call_args[0][0]
+        assert len(inserted) == 2
+        assert inserted[0] == {'id': 1, 'name': 'Alice', 'time': '2026-01-19'}
+        assert inserted[1] == {'id': 2, 'name': 'Bob', 'time': '2026-01-20'}
+
+    def test_teardown_preserves_user_diff_column(self, tmp_path):
+        """Test that user's 'diff' column is preserved when it collides with
+        Pathway metadata diff."""
+        from pwetl.sinks.database import DatabaseSink
+
+        sink = DatabaseSink('test', {
+            'dsn': 'sqlite://',
+            'table': 'output_table',
+        })
+
+        temp_file = tmp_path / 'output.jsonl'
+        with open(temp_file, 'w') as f:
+            # User has 'diff' column, Pathway also writes 'diff' metadata
+            f.write('{"id":1,"diff":"high","diff":1,"time":0}\n')
+            f.write('{"id":2,"diff":"low","diff":-1,"time":0}\n')
+
+        sink._temp_path = str(temp_file)
+        sink._engine = MagicMock()
+        mock_dialect = MagicMock()
+        mock_dialect.insert.return_value = 1
+        sink._dialect = mock_dialect
+
+        sink.teardown()
+
+        inserted = mock_dialect.insert.call_args[0][0]
+        # Only diff==1 records kept (Pathway metadata diff used for filtering)
+        assert len(inserted) == 1
+        # User's diff value is preserved
+        assert inserted[0] == {'id': 1, 'diff': 'high'}
+
+    def test_teardown_preserves_both_time_and_diff_columns(self, tmp_path):
+        """Test both user time and diff columns preserved simultaneously."""
+        from pwetl.sinks.database import DatabaseSink
+
+        sink = DatabaseSink('test', {
+            'dsn': 'sqlite://',
+            'table': 'output_table',
+        })
+
+        temp_file = tmp_path / 'output.jsonl'
+        with open(temp_file, 'w') as f:
+            f.write('{"id":1,"time":"2026-01","diff":"up","diff":1,"time":0}\n')
+
+        sink._temp_path = str(temp_file)
+        sink._engine = MagicMock()
+        mock_dialect = MagicMock()
+        mock_dialect.insert.return_value = 1
+        sink._dialect = mock_dialect
+
+        sink.teardown()
+
+        inserted = mock_dialect.insert.call_args[0][0]
+        assert len(inserted) == 1
+        assert inserted[0] == {'id': 1, 'time': '2026-01', 'diff': 'up'}
 
     def test_teardown_no_records_skips_write(self, tmp_path):
         """Test that empty JSONL skips dialect calls."""

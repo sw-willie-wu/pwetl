@@ -193,7 +193,9 @@ sinks:
             sys.path.remove(str(tmp_path))
 
     def test_engine_invalid_config(self, tmp_path):
-        """Test engine with invalid config."""
+        """Test engine with invalid config raises ConfigurationError."""
+        from pwetl.core.exceptions import ConfigurationError
+
         # Create invalid config (missing required fields)
         config_file = tmp_path / "invalid_config.yaml"
         config_content = """
@@ -201,14 +203,62 @@ sources: []
 """
         config_file.write_text(config_content)
 
-        # Engine should raise error
-        with pytest.raises(Exception):
+        # Engine should raise ConfigurationError
+        with pytest.raises(ConfigurationError):
             engine = ETLEngine(config_path=config_file, verbose=False)
             engine.execute()
 
+    def test_engine_bad_sink_config_raises_configuration_error(self, tmp_path):
+        """Test that bad sink config raises ConfigurationError."""
+        import sys
+        from pwetl.core.exceptions import ConfigurationError
+
+        transform_file = tmp_path / "transform.py"
+        transform_file.write_text("""
+from pwetl.transforms.base import BaseTransform
+
+class T(BaseTransform):
+    def transform(self, tables):
+        return {'out': tables['input']}
+""")
+        sys.path.insert(0, str(tmp_path))
+        if 'transform' in sys.modules:
+            del sys.modules['transform']
+
+        try:
+            input_file = tmp_path / "input.csv"
+            input_file.write_text("id,val\n1,10\n")
+
+            config_file = tmp_path / "config.yaml"
+            # Database sink missing required 'table' config
+            config_file.write_text(f"""
+sources:
+  - name: input
+    type: csv
+    path: {input_file}
+    schema:
+      id: int
+      val: int
+
+transform: transform.T
+
+sinks:
+  - name: out
+    type: database
+    dsn: sqlite://
+""")
+
+            with pytest.raises(ConfigurationError, match="Sink 'out'"):
+                engine = ETLEngine(config_path=config_file, verbose=False)
+                engine.execute()
+        finally:
+            sys.path.remove(str(tmp_path))
+
     def test_engine_nonexistent_config(self):
         """Test engine with nonexistent config file."""
-        with pytest.raises((FileNotFoundError, RuntimeError)):
+        from pwetl.core.exceptions import ConfigurationError
+
+        with pytest.raises((FileNotFoundError, ConfigurationError)):
             engine = ETLEngine(config_path=Path("/nonexistent/config.yaml"), verbose=False)
             engine.execute()
 
