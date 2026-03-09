@@ -4,10 +4,14 @@
 
 -- 1. Create table
 CREATE TABLE IF NOT EXISTS sales_summary_v3 (
-    category     TEXT PRIMARY KEY,
+    id           UUID PRIMARY KEY,
+    product_id   TEXT,
+    product_name TEXT,
+    category     TEXT,
     total_sold   INTEGER,
     revenue      DOUBLE PRECISION,
     avg_price    DOUBLE PRECISION,
+    time         TIMESTAMPTZ,          -- Collides with Pathway metadata, sink handles it
     updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 

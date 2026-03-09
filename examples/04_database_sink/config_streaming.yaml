@@ -25,10 +25,14 @@ sinks:
     dsn: postgresql://${DB_USER:pwetl}:${DB_PASSWORD:pwetl_pass}@${DB_HOST:localhost}:${DB_PORT:5436}/${DB_NAME:pwetl_demo}
     table: sales_summary_v2
     columns:
-      category: text, pk
-      total_quantity: bigint
-      total_revenue: float
-      order_count: bigint
+      id: uuid, pk
+      product_id: text
+      product_name: text
+      category: text
+      total_sold: bigint
+      revenue: float
+      avg_price: float
+      time: timestamptz            # Collides with Pathway metadata, sink handles it
 
   - name: output_csv
     type: file
