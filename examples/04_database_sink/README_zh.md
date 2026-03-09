@@ -87,7 +87,7 @@ sinks:
 
 ### config_init_sql.yaml
 
-使用 `init_sql: init.sql` 執行自訂 DDL。適合需要進階 DDL 控制的場景（如 index、trigger 等 `columns` 無法表達的）。
+使用 `init_sql: sink_init.sql` 執行自訂 DDL（CREATE TABLE + INDEX + TRIGGER）。適合需要進階 DDL 控制的場景（`columns` 無法表達的）。
 
 ## Pipeline 流程
 

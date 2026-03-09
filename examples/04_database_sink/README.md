@@ -87,7 +87,7 @@ Watches `sales_data.csv` for changes. Writes to `sales_summary_v2` with `columns
 
 ### config_init_sql.yaml
 
-Uses `init_sql: init.sql` to execute custom DDL before writing. Useful when you need advanced DDL control (indexes, triggers, etc.) that `columns` can't express.
+Uses `init_sql: sink_init.sql` to execute custom DDL (CREATE TABLE + INDEX + TRIGGER) before writing. Useful when you need advanced DDL control that `columns` can't express.
 
 ## Pipeline Flow
 

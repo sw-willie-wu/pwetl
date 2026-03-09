@@ -169,7 +169,7 @@ sources:
   - name: db_data
     type: database
     dsn: postgresql://user:pass@host:5432/mydb
-    table: users               # 或使用 query_file: query.sql
+    table: users               # 或使用 query_sql: query.sql
     mode: streaming
     refresh_interval: 60
     diff_ignore_fields:
@@ -218,7 +218,15 @@ sinks:
     type: database
     dsn: postgresql://user:${DB_PASSWORD}@localhost:5432/mydb
     table: output_table
-    if_not_exists: create      # 選用：'error'（預設）或 'create'
+    write_mode: upsert         # insert（預設）或 upsert
+    primary_key: [id]          # upsert 必填
+    columns:                   # 選用：自動建表
+      id: uuid, pk
+      name: varchar(100)
+      lat: float
+      lng: float
+    # init_sql: setup.sql      # 替代方案：從 SQL 檔案執行進階 DDL
+    # dialect: postgresql       # 選用：覆寫自動偵測
     ssh_tunnel:                # 選用 SSH 隧道
       host: jump-server
       username: ssh_user
@@ -358,7 +366,11 @@ src/pwetl/
 │   ├── base.py               # BaseSink
 │   ├── file.py               # FileSink（CSV/JSON/JSONL）
 │   ├── api.py                # APISink（POST/PUT to API）
-│   └── database.py           # DatabaseSink（SQLAlchemy DSN）
+│   ├── database.py           # DatabaseSink（SQLAlchemy DSN + dialect 策略）
+│   └── dialect/              # 資料庫 dialect 實作
+│       ├── base.py           # BaseDialect（抽象介面）
+│       ├── default.py        # DefaultDialect（raw SQL fallback）
+│       └── postgres.py       # PostgresDialect（ON CONFLICT upsert）
 ├── transforms/
 │   └── base.py               # BaseTransform
 └── utils/

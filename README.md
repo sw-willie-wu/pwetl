@@ -171,7 +171,7 @@ sources:
   - name: db_data
     type: database
     dsn: postgresql://user:pass@host:5432/mydb
-    table: users               # or use query_file: query.sql
+    table: users               # or use query_sql: query.sql
     mode: streaming
     refresh_interval: 60
     diff_ignore_fields:
@@ -220,7 +220,15 @@ sinks:
     type: database
     dsn: postgresql://user:${DB_PASSWORD}@localhost:5432/mydb
     table: output_table
-    if_not_exists: create      # optional: 'error' (default) or 'create'
+    write_mode: upsert         # insert (default) or upsert
+    primary_key: [id]          # required for upsert
+    columns:                   # optional: auto-create table
+      id: uuid, pk
+      name: varchar(100)
+      lat: float
+      lng: float
+    # init_sql: setup.sql      # alternative: advanced DDL from SQL file
+    # dialect: postgresql       # optional: override auto-detection
     ssh_tunnel:                # optional SSH tunnel
       host: jump-server
       username: ssh_user
@@ -360,7 +368,11 @@ src/pwetl/
 │   ├── base.py               # BaseSink
 │   ├── file.py               # FileSink (CSV/JSON/JSONL)
 │   ├── api.py                # APISink (POST/PUT to API)
-│   └── database.py           # DatabaseSink (SQLAlchemy DSN)
+│   ├── database.py           # DatabaseSink (SQLAlchemy DSN + dialect strategy)
+│   └── dialect/              # Database dialect implementations
+│       ├── base.py           # BaseDialect (abstract interface)
+│       ├── default.py        # DefaultDialect (raw SQL fallback)
+│       └── postgres.py       # PostgresDialect (ON CONFLICT upsert)
 ├── transforms/
 │   └── base.py               # BaseTransform
 └── utils/
